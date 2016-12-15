@@ -2,6 +2,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/pull_to_refresh_head"
     android:layout_width="fill_parent"
+    android:background="#aabbcc"
     android:layout_height="60dip">
 
     <LinearLayout
