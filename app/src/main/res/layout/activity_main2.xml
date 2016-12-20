@@ -11,6 +11,7 @@
 
     <Button
         android:text="ListView"
+        android:textAllCaps="false"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:id="@+id/btlv" />
@@ -23,6 +24,7 @@
 
     <Button
         android:text="RecyclerView"
+        android:textAllCaps="false"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:id="@+id/btrv" />

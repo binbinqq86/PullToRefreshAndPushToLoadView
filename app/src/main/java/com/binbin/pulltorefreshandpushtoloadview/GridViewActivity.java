@@ -5,7 +5,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.widget.ArrayAdapter;
 import android.widget.GridView;
 
-import com.binbin.pulltorefreshandpushtoloadview.listview.PullToRefreshAndPushToLoadView3;
+import com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView3;
 
 public class GridViewActivity extends AppCompatActivity {
 

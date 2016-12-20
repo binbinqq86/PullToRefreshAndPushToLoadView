@@ -1,4 +1,4 @@
-package com.binbin.pulltorefreshandpushtoloadview.listview;
+package com.binbin.pulltorefreshandpushtoloadview.view;
 
 import android.content.Context;
 import android.content.SharedPreferences;

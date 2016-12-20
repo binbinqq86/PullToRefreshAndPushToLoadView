@@ -1,30 +1,40 @@
 package com.binbin.pulltorefreshandpushtoloadview;
 
+import android.content.Context;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.widget.ArrayAdapter;
-import android.widget.GridView;
+import android.support.v7.widget.DefaultItemAnimator;
+import android.support.v7.widget.GridLayoutManager;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
 
-import com.binbin.pulltorefreshandpushtoloadview.listview.PullToRefreshAndPushToLoadView3;
+import com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView3;
 
 public class RecyclerViewActivity extends AppCompatActivity {
 
     private PullToRefreshAndPushToLoadView3 pullToRefreshAndPushToLoadView;
-    //    private ListView listView;
-    private GridView gridView;
+    private RecyclerView recyclerView;
     private String[] items = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"};
-    private ArrayAdapter<String> adapter;
+    private MyAdapter adapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.recycler_activity_main);
         pullToRefreshAndPushToLoadView = (PullToRefreshAndPushToLoadView3) findViewById(R.id.prpt);
-//        listView = (ListView) findViewById(R.id.lv);
-        gridView = (GridView) findViewById(R.id.gv);
-        adapter = new ArrayAdapter<String>(this, R.layout.item, items);
-//        listView.setAdapter(adapter);
-        gridView.setAdapter(adapter);
+        recyclerView = (RecyclerView) findViewById(R.id.rv);
+//        items=new String[]{};
+        adapter = new MyAdapter(items,this);
+        recyclerView.setAdapter(adapter);
+        LinearLayoutManager layoutManager=new GridLayoutManager(this,2);
+//        LinearLayoutManager layoutManager=new LinearLayoutManager(this);
+        recyclerView.setLayoutManager(layoutManager);
+        recyclerView.addItemDecoration(new DividerItemDecoration(this,layoutManager.getOrientation()));
+        recyclerView.setItemAnimator(new DefaultItemAnimator());
         pullToRefreshAndPushToLoadView.setOnRefreshListener(new PullToRefreshAndPushToLoadView3.PullToRefreshListener() {
             @Override
             public void onRefresh() {
@@ -46,5 +56,39 @@ public class RecyclerViewActivity extends AppCompatActivity {
                 pullToRefreshAndPushToLoadView.finishRefreshing();
             }
         }.start();
+    }
+
+    class MyAdapter extends RecyclerView.Adapter<MyAdapter.MyViewHolder> {
+
+        private String[] datas;
+        private Context mContext;
+        public MyAdapter(String[] datas,Context mContext){
+            this.datas=datas;
+            this.mContext=mContext;
+        }
+        @Override
+        public MyViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            return new MyViewHolder(LayoutInflater.from(mContext).inflate(R.layout.item, parent,
+                    false));
+        }
+
+        @Override
+        public void onBindViewHolder(final MyViewHolder holder, final int position) {
+            holder.tv.setText(datas[position]);
+        }
+
+        @Override
+        public int getItemCount() {
+            return datas.length;
+        }
+
+        class MyViewHolder extends RecyclerView.ViewHolder {
+            TextView tv;
+
+            public MyViewHolder(View view) {
+                super(view);
+                tv = (TextView) view.findViewById(R.id.tv);
+            }
+        }
     }
 }

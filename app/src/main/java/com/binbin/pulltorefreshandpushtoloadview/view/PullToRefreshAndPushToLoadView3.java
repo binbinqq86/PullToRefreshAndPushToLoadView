@@ -1,21 +1,26 @@
-package com.binbin.pulltorefreshandpushtoloadview.listview;
+package com.binbin.pulltorefreshandpushtoloadview.view;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.os.AsyncTask;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.support.annotation.RequiresApi;
+import android.support.v7.widget.RecyclerView;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.view.ViewGroup;
 import android.view.animation.RotateAnimation;
+import android.widget.AbsListView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.Scroller;
 import android.widget.TextView;
 
 import com.binbin.pulltorefreshandpushtoloadview.R;
@@ -23,9 +28,12 @@ import com.binbin.pulltorefreshandpushtoloadview.R;
 /**
  * Created by -- on 2016/11/2.
  * 自定义下拉刷新上拉加载的基类，可以扩展多种可滑动view(ListView,GridView,RecyclerView...)
+ * 第三版：采用Scroller实现下拉效果，支持ListView,GridView,RecyclerView，同时修复一些UI上滑动的bug
  */
 
-public class PullToRefreshAndPushToLoadView extends LinearLayout implements View.OnTouchListener{
+public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
+    private static final String TAG="tianbin";
+    private Scroller mScroller;
     private Context mContext;
     /**
      * 在被判定为滚动之前用户手指可以移动的最大值。
@@ -52,9 +60,9 @@ public class PullToRefreshAndPushToLoadView extends LinearLayout implements View
     private View header;
 
     /**
-     * 需要去下拉刷新的ListView
+     * 需要去下拉刷新的View
      */
-    private ListView listView;
+    private ViewGroup mView;
 
     /**
      * 刷新时显示的进度条
@@ -75,11 +83,6 @@ public class PullToRefreshAndPushToLoadView extends LinearLayout implements View
      * 上次更新时间的文字描述
      */
     private TextView updateAt;
-
-    /**
-     * 下拉头的布局参数
-     */
-    private MarginLayoutParams headerLayoutParams;
 
     /**
      * 上次更新时间的毫秒值
@@ -123,11 +126,15 @@ public class PullToRefreshAndPushToLoadView extends LinearLayout implements View
     /**
      * 当前是否可以下拉，只有ListView滚动到头的时候才允许下拉
      */
-    private boolean ableToPull;
+    private boolean isTop;
     /**
-     * 手指按下时的屏幕纵坐标
+     * 上次手指按下时的屏幕纵坐标
      */
-    private float yDown;
+    private float mLastY=-1;
+    /**
+     * 第一次手指按下时的屏幕纵坐标
+     */
+    private float mFirstY=-1;
     /**
      * 当前处理什么状态，可选值有STATUS_PULL_TO_REFRESH, STATUS_RELEASE_TO_REFRESH,
      * STATUS_REFRESHING 和 STATUS_REFRESH_FINISHED
@@ -167,28 +174,44 @@ public class PullToRefreshAndPushToLoadView extends LinearLayout implements View
      */
     private PullToRefreshListener mListener;
 
+    /**
+     * 是否正在刷新
+     */
+    private boolean isRefreshing;
 
-    public PullToRefreshAndPushToLoadView(Context context) {
+    private static final float DEFAULT_RATIO=0.5f;
+    /**
+     * 拖动阻力系数
+     */
+    private float ratio=DEFAULT_RATIO;
+
+    private int screenHeight;
+
+    private Handler handler=new Handler(Looper.getMainLooper());
+
+    public PullToRefreshAndPushToLoadView3(Context context) {
         this(context,null);
     }
 
-    public PullToRefreshAndPushToLoadView(Context context, AttributeSet attrs) {
+    public PullToRefreshAndPushToLoadView3(Context context, AttributeSet attrs) {
         this(context, attrs,0);
     }
 
-    public PullToRefreshAndPushToLoadView(Context context, AttributeSet attrs, int defStyleAttr) {
+    public PullToRefreshAndPushToLoadView3(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         init(context);
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public PullToRefreshAndPushToLoadView(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+    public PullToRefreshAndPushToLoadView3(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
         init(context);
     }
 
     private void init(Context mContext){
         this.mContext=mContext;
+        mScroller=new Scroller(mContext);
+        screenHeight=getResources().getDisplayMetrics().heightPixels;
         preferences = PreferenceManager.getDefaultSharedPreferences(mContext);
         header = LayoutInflater.from(mContext).inflate(R.layout.refresh_header, null, true);
         progressBar = (ProgressBar) header.findViewById(R.id.progress_bar);
@@ -200,6 +223,20 @@ public class PullToRefreshAndPushToLoadView extends LinearLayout implements View
         setOrientation(VERTICAL);
         addView(header, 0);
     }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+
+        int measuredWidth = MeasureSpec.getSize(widthMeasureSpec);
+        int measuredHeight = MeasureSpec.getSize(heightMeasureSpec);
+        //为ViewGroup设置宽高
+        setMeasuredDimension(measuredWidth,measuredHeight);
+
+        // 计算出所有的childView的宽和高---可用
+        measureChildren(widthMeasureSpec, heightMeasureSpec);
+    }
+
     /**
      * 进行一些关键性的初始化操作，比如：将下拉头向上偏移进行隐藏，给ListView注册touch事件。
      */
@@ -208,93 +245,172 @@ public class PullToRefreshAndPushToLoadView extends LinearLayout implements View
         super.onLayout(changed, l, t, r, b);
         if (changed && !loadOnce) {
             hideHeaderHeight = -header.getHeight();
-            headerLayoutParams = (MarginLayoutParams) header.getLayoutParams();
-            headerLayoutParams.topMargin = hideHeaderHeight;
-            listView = (ListView) getChildAt(1);
-            listView.setOnTouchListener(this);
+            mView = (ViewGroup) getChildAt(1);
             loadOnce = true;
         }
+        header.layout(0,hideHeaderHeight,r,0);
+        mView.layout(0,0,r,b);
     }
 
     @Override
-    public boolean onTouch(View v, MotionEvent event) {
-        setIsAbleToPull(event);
-        if(ableToPull){
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    yDown = event.getRawY();
-                    break;
-                case MotionEvent.ACTION_MOVE:
-                    float yMove = event.getRawY();
-                    int distance = (int) (yMove - yDown);
-                    // 如果手指是上滑状态，并且下拉头是完全隐藏的，就屏蔽下拉事件
-                    if (distance <= 0 && headerLayoutParams.topMargin <= hideHeaderHeight) {
-                        return false;
-                    }
-                    if (distance < touchSlop) {
-                        return false;
-                    }
-                    if (currentStatus != STATUS_REFRESHING) {
-                        if (headerLayoutParams.topMargin > 0) {
-                            currentStatus = STATUS_RELEASE_TO_REFRESH;
-                        } else {
-                            currentStatus = STATUS_PULL_TO_REFRESH;
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        judgeIsTop();//每次首先进行判断
+        switch (event.getAction()){
+            case MotionEvent.ACTION_DOWN:
+                mLastY=event.getRawY();
+                mFirstY=event.getRawY();
+                break;
+            case MotionEvent.ACTION_MOVE:
+                float totalDistance=event.getRawY()-mFirstY;
+                float deltaY=event.getRawY()-mLastY;
+                mLastY=event.getRawY();
+//                if (Math.abs(deltaY) < touchSlop) {
+//                    Log.e(TAG,deltaY+"=============Math.abs(deltaY) < touchSlop============="+touchSlop);
+//                    return false;
+//                }
+                if(currentStatus==STATUS_REFRESHING){
+                    //如果正在刷新
+                    if(getScrollY()<=0&&isTop){
+                        //说明头部显示，自己处理滑动，无论上滑下滑均同步移动（==0代表滑动到顶部可以继续下拉）
+                        if(deltaY<0){//来回按住上下移动：下拉逐渐增加难度，上拉不变
+                            ratio=DEFAULT_RATIO;
+                        }else{
+                            ratio-=0.01;//逐步增加下拉难度
                         }
-                        // 通过偏移下拉头的topMargin值，来实现下拉效果
-                        headerLayoutParams.topMargin = (distance / 2) + hideHeaderHeight;
-                        header.setLayoutParams(headerLayoutParams);
+                        int dy=(int)(deltaY*ratio);
+                        scrollBy(0,-dy);
+                        return true;
+                    }else{
+                        Log.e(TAG,getScrollY()+"+++");
+                        //问题：来回拖住不放，当滑上去的时候，列表会突然蹦到第二条
+                        if(getScrollY()>0){
+                            scrollTo(0,0);
+                        }
+                        return super.dispatchTouchEvent(event);
                     }
-                    break;
-                case MotionEvent.ACTION_UP:
-                default:
-                    if (currentStatus == STATUS_RELEASE_TO_REFRESH) {
-                        // 松手时如果是释放立即刷新状态，就去调用正在刷新的任务
-                        new RefreshingTask().execute();
-                    } else if (currentStatus == STATUS_PULL_TO_REFRESH) {
-                        // 松手时如果是下拉状态，就去调用隐藏下拉头的任务
-                        new HideHeaderTask().execute();
+                }else{
+                    // 如果手指是上滑状态或者没到顶部，交给子view去滑动
+                    if (totalDistance <= 0 || !isTop) {
+                        if(getScrollY()!=0){
+                            scrollTo(0,0);
+                            if(mView instanceof AbsListView){
+                                AbsListView absListView= (AbsListView) mView;
+                                absListView.setSelection(0);
+                            }else if(mView instanceof RecyclerView){
+                                RecyclerView recyclerView= (RecyclerView) mView;
+                                recyclerView.scrollToPosition(0);
+                            }
+                        }
+                        return super.dispatchTouchEvent(event);
                     }
-                    break;
-            }
-            // 时刻记得更新下拉头中的信息
-            if (currentStatus == STATUS_PULL_TO_REFRESH
-                    || currentStatus == STATUS_RELEASE_TO_REFRESH) {
-                updateHeaderView();
-                // 当前正处于下拉或释放状态，要让ListView失去焦点，否则被点击的那一项会一直处于选中状态
-                listView.setPressed(false);
-                listView.setFocusable(false);
-                listView.setFocusableInTouchMode(false);
-                lastStatus = currentStatus;
-                // 当前正处于下拉或释放状态，通过返回true屏蔽掉ListView的滚动事件
-                return true;
-            }
+                    if (getScrollY() <= hideHeaderHeight) {
+                        currentStatus = STATUS_RELEASE_TO_REFRESH;
+                    } else {
+                        currentStatus = STATUS_PULL_TO_REFRESH;
+                    }
+//                    Log.e(TAG,deltaY+"#"+getScrollY());
+                    scrollBy(0,-(int)(deltaY*DEFAULT_RATIO));
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+            default:
+                ratio=DEFAULT_RATIO;//重置
+                if (currentStatus == STATUS_RELEASE_TO_REFRESH) {
+                    // 松手时如果是释放立即刷新状态，就去调用正在刷新的任务
+                    backToTop();
+                } else if (currentStatus == STATUS_PULL_TO_REFRESH) {
+                    // 松手时如果是下拉状态，就去调用隐藏下拉头的任务
+                    hideHeader();
+                }else if(currentStatus==STATUS_REFRESHING){
+                    if(getScrollY() <= hideHeaderHeight){
+                        //回弹
+                        backToTop();
+                    }
+                }
+                break;
         }
-        return false;
+        // 时刻记得更新下拉头中的信息
+        if (currentStatus == STATUS_PULL_TO_REFRESH || currentStatus == STATUS_RELEASE_TO_REFRESH) {
+            updateHeaderView();
+            // 当前正处于下拉或释放状态，要让ListView失去焦点，否则被点击的那一项会一直处于选中状态
+            mView.setPressed(false);
+            mView.setFocusable(false);
+            mView.setFocusableInTouchMode(false);
+            lastStatus = currentStatus;
+            // 当前正处于下拉或释放状态，通过返回true屏蔽掉ListView的滚动事件
+            return true;
+        }
+        return super.dispatchTouchEvent(event);
     }
 
+    private void backToTop(){
+        currentStatus=STATUS_REFRESHING;
+        updateHeaderView();
+        mScroller.startScroll(0,getScrollY(),0,hideHeaderHeight-getScrollY());
+        invalidate();
+        if (mListener != null&&!isRefreshing) {
+            isRefreshing=true;
+            mListener.onRefresh();
+        }
+    }
+
+    private void hideHeader(){
+        currentStatus = STATUS_REFRESH_FINISHED;
+        isRefreshing=false;
+        preferences.edit().putLong(UPDATED_AT + mId, System.currentTimeMillis()).commit();
+        mScroller.startScroll(0,getScrollY(),0,-getScrollY());
+        invalidate();
+    }
+
+    @Override
+    public void computeScroll() {
+        // TODO Auto-generated method stub
+        if (mScroller.computeScrollOffset()) {
+            scrollTo(mScroller.getCurrX(), mScroller.getCurrY());
+            postInvalidate();
+        }
+    }
     /**
-     * 根据当前ListView的滚动状态来设定 {@link #ableToPull}
-     * 的值，每次都需要在onTouch中第一个执行，这样可以判断出当前应该是滚动ListView，还是应该进行下拉。
-     *
-     * @param event
+     * 根据当前View的滚动状态来设定 {@link #isTop}
+     * 的值，每次都需要在触摸事件中第一个执行，这样可以判断出当前应该是滚动View，还是应该进行下拉。
      */
-    private void setIsAbleToPull(MotionEvent event) {
-        View firstChild = listView.getChildAt(0);
-        if (firstChild != null) {
-            int firstVisiblePos = listView.getFirstVisiblePosition();
-            if (firstVisiblePos == 0 && firstChild.getTop() == 0) {
-                // 如果首个元素的上边缘，距离父布局值为0，就说明ListView滚动到了最顶部，此时应该允许下拉刷新
-                ableToPull = true;
-            } else {
-                if (headerLayoutParams.topMargin != hideHeaderHeight) {
-                    headerLayoutParams.topMargin = hideHeaderHeight;
-                    header.setLayoutParams(headerLayoutParams);
+    private void judgeIsTop() {
+        if(mView instanceof AbsListView){
+            AbsListView absListView=(AbsListView)mView;
+            View firstChild = absListView.getChildAt(0);//返回的是当前屏幕中的第一个子view，非整个列表
+            if (firstChild != null) {
+                int firstVisiblePos = absListView.getFirstVisiblePosition();//不必完全可见，当前屏幕中第一个可见的子view在整个列表的位置
+                if (firstVisiblePos == 0 && firstChild.getTop() == 0) {
+                    // 如果首个元素的上边缘，距离父布局值为0，就说明ListView滚动到了最顶部，此时应该允许下拉刷新
+                    isTop = true;
+                } else {
+                    isTop = false;
                 }
-                ableToPull = false;
+            } else {
+                // 如果ListView中没有元素，也应该允许下拉刷新
+                isTop = true;
             }
-        } else {
-            // 如果ListView中没有元素，也应该允许下拉刷新
-            ableToPull = true;
+        }else if(mView instanceof RecyclerView){
+            RecyclerView recyclerView= (RecyclerView) mView;
+            View firstChild=recyclerView.getLayoutManager().findViewByPosition(0);//firstChild不必须完全可见
+            View firstVisibleChild=recyclerView.getChildAt(0);//返回的是当前屏幕中的第一个子view，非整个列表
+//            if(firstChild!=null){
+//                Log.e("tianbin",firstChild.getTop()+"==="+recyclerView.getChildAt(0).getTop());
+//            }else{
+//                Log.e("tianbin","+++++++++");
+//            }
+            if(firstVisibleChild!=null){
+                if(firstChild!=null&&firstChild.getTop()==0){
+                    isTop=true;
+                }else{
+                    isTop=false;
+                }
+            }else{
+                //没有元素也允许刷新
+                isTop=true;
+            }
+        }else{
+            isTop=true;
         }
     }
     /**
@@ -337,83 +453,12 @@ public class PullToRefreshAndPushToLoadView extends LinearLayout implements View
     }
 
     /**
-     * 正在刷新的任务，在此任务中会去回调注册进来的下拉刷新监听器。
-     *
-     * @author guolin
-     */
-    class RefreshingTask extends AsyncTask<Void, Integer, Void> {
-
-        @Override
-        protected Void doInBackground(Void... params) {
-            int topMargin = headerLayoutParams.topMargin;
-            while (true) {
-                topMargin = topMargin + SCROLL_SPEED;
-                if (topMargin <= 0) {
-                    topMargin = 0;
-                    break;
-                }
-                publishProgress(topMargin);
-                sleep(10);
-            }
-            currentStatus = STATUS_REFRESHING;
-            publishProgress(0);
-            if (mListener != null) {
-                mListener.onRefresh();
-            }
-            return null;
-        }
-
-        @Override
-        protected void onProgressUpdate(Integer... topMargin) {
-            updateHeaderView();
-            headerLayoutParams.topMargin = topMargin[0];
-            header.setLayoutParams(headerLayoutParams);
-        }
-
-    }
-    /**
-     * 隐藏下拉头的任务，当未进行下拉刷新或下拉刷新完成后，此任务将会使下拉头重新隐藏。
-     *
-     * @author guolin
-     */
-    class HideHeaderTask extends AsyncTask<Void, Integer, Integer> {
-
-        @Override
-        protected Integer doInBackground(Void... params) {
-            int topMargin = headerLayoutParams.topMargin;
-            while (true) {
-                topMargin = topMargin + SCROLL_SPEED;
-                if (topMargin <= hideHeaderHeight) {
-                    topMargin = hideHeaderHeight;
-                    break;
-                }
-                publishProgress(topMargin);
-                sleep(10);
-            }
-            return topMargin;
-        }
-
-        @Override
-        protected void onProgressUpdate(Integer... topMargin) {
-            headerLayoutParams.topMargin = topMargin[0];
-            header.setLayoutParams(headerLayoutParams);
-        }
-
-        @Override
-        protected void onPostExecute(Integer topMargin) {
-            headerLayoutParams.topMargin = topMargin;
-            header.setLayoutParams(headerLayoutParams);
-            currentStatus = STATUS_REFRESH_FINISHED;
-        }
-    }
-
-    /**
      * 使当前线程睡眠指定的毫秒数。
      *
      * @param time
      *            指定当前线程睡眠多久，以毫秒为单位
      */
-    private void sleep(int time) {
+    private void sleeping(int time) {
         try {
             Thread.sleep(time);
         } catch (InterruptedException e) {
@@ -423,8 +468,6 @@ public class PullToRefreshAndPushToLoadView extends LinearLayout implements View
 
     /**
      * 下拉刷新的监听器，使用下拉刷新的地方应该注册此监听器来获取刷新回调。
-     *
-     * @author guolin
      */
     public interface PullToRefreshListener {
 
@@ -441,6 +484,7 @@ public class PullToRefreshAndPushToLoadView extends LinearLayout implements View
      *            监听器的实现。
      * @param id
      *            为了防止不同界面的下拉刷新在上次更新时间上互相有冲突， 请不同界面在注册下拉刷新监听器时一定要传入不同的id。
+     *            如果不用时间则可以不传递此参数
      */
     public void setOnRefreshListener(PullToRefreshListener listener, int id) {
         mListener = listener;
@@ -448,12 +492,25 @@ public class PullToRefreshAndPushToLoadView extends LinearLayout implements View
     }
 
     /**
+     * 给下拉刷新控件注册一个监听器。
+     *
+     * @param listener
+     *            监听器的实现。
+     */
+    public void setOnRefreshListener(PullToRefreshListener listener) {
+        setOnRefreshListener(listener,mId);
+    }
+
+    /**
      * 当所有的刷新逻辑完成后，记录调用一下，否则你的ListView将一直处于正在刷新状态。
      */
     public void finishRefreshing() {
-        currentStatus = STATUS_REFRESH_FINISHED;
-        preferences.edit().putLong(UPDATED_AT + mId, System.currentTimeMillis()).commit();
-        new HideHeaderTask().execute();
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                hideHeader();
+            }
+        });
     }
     /**
      * 更新下拉头中的信息。
@@ -500,4 +557,5 @@ public class PullToRefreshAndPushToLoadView extends LinearLayout implements View
         animation.setFillAfter(true);
         arrow.startAnimation(animation);
     }
+
 }

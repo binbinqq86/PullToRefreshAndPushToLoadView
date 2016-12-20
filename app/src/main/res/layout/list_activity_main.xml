@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <com.binbin.pulltorefreshandpushtoloadview.listview.PullToRefreshAndPushToLoadView3
+    <com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView3
         android:id="@+id/prpt"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
@@ -19,5 +19,5 @@
             android:headerDividersEnabled="true"
             android:visibility="visible" />
 
-    </com.binbin.pulltorefreshandpushtoloadview.listview.PullToRefreshAndPushToLoadView3>
+    </com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView3>
 </RelativeLayout>
