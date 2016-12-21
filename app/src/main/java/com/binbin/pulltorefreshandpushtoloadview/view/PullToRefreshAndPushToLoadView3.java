@@ -31,8 +31,8 @@ import com.binbin.pulltorefreshandpushtoloadview.R;
  * 第三版：采用Scroller实现下拉效果，支持ListView,GridView,RecyclerView，同时修复一些UI上滑动的bug
  */
 
-public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
-    private static final String TAG="tianbin";
+public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
+    private static final String TAG = "tianbin";
     private Scroller mScroller;
     private Context mContext;
     /**
@@ -130,16 +130,17 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
     /**
      * 上次手指按下时的屏幕纵坐标
      */
-    private float mLastY=-1;
+    private float mLastY = -1;
     /**
      * 第一次手指按下时的屏幕纵坐标
      */
-    private float mFirstY=-1;
+    private float mFirstY = -1;
     /**
      * 当前处理什么状态，可选值有STATUS_PULL_TO_REFRESH, STATUS_RELEASE_TO_REFRESH,
      * STATUS_REFRESHING 和 STATUS_REFRESH_FINISHED
      */
-    private int currentStatus = STATUS_REFRESH_FINISHED;;
+    private int currentStatus = STATUS_REFRESH_FINISHED;
+    ;
 
     /**
      * 记录上一次的状态是什么，避免进行重复操作
@@ -179,22 +180,22 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
      */
     private boolean isRefreshing;
 
-    private static final float DEFAULT_RATIO=0.5f;
+    private static final float DEFAULT_RATIO = 0.5f;
     /**
      * 拖动阻力系数
      */
-    private float ratio=DEFAULT_RATIO;
+    private float ratio = DEFAULT_RATIO;
 
     private int screenHeight;
 
-    private Handler handler=new Handler(Looper.getMainLooper());
+    private Handler handler = new Handler(Looper.getMainLooper());
 
     public PullToRefreshAndPushToLoadView3(Context context) {
-        this(context,null);
+        this(context, null);
     }
 
     public PullToRefreshAndPushToLoadView3(Context context, AttributeSet attrs) {
-        this(context, attrs,0);
+        this(context, attrs, 0);
     }
 
     public PullToRefreshAndPushToLoadView3(Context context, AttributeSet attrs, int defStyleAttr) {
@@ -208,10 +209,10 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
         init(context);
     }
 
-    private void init(Context mContext){
-        this.mContext=mContext;
-        mScroller=new Scroller(mContext);
-        screenHeight=getResources().getDisplayMetrics().heightPixels;
+    private void init(Context mContext) {
+        this.mContext = mContext;
+        mScroller = new Scroller(mContext);
+        screenHeight = getResources().getDisplayMetrics().heightPixels;
         preferences = PreferenceManager.getDefaultSharedPreferences(mContext);
         header = LayoutInflater.from(mContext).inflate(R.layout.refresh_header, null, true);
         progressBar = (ProgressBar) header.findViewById(R.id.progress_bar);
@@ -231,7 +232,7 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
         int measuredWidth = MeasureSpec.getSize(widthMeasureSpec);
         int measuredHeight = MeasureSpec.getSize(heightMeasureSpec);
         //为ViewGroup设置宽高
-        setMeasuredDimension(measuredWidth,measuredHeight);
+        setMeasuredDimension(measuredWidth, measuredHeight);
 
         // 计算出所有的childView的宽和高---可用
         measureChildren(widthMeasureSpec, heightMeasureSpec);
@@ -248,56 +249,56 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
             mView = (ViewGroup) getChildAt(1);
             loadOnce = true;
         }
-        header.layout(0,hideHeaderHeight,r,0);
-        mView.layout(0,0,r,b);
+        header.layout(0, hideHeaderHeight, r, 0);
+        mView.layout(0, 0, r, b);
     }
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
         judgeIsTop();//每次首先进行判断
-        switch (event.getAction()){
+        switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                mLastY=event.getRawY();
-                mFirstY=event.getRawY();
+                mLastY = event.getRawY();
+                mFirstY = event.getRawY();
                 break;
             case MotionEvent.ACTION_MOVE:
-                float totalDistance=event.getRawY()-mFirstY;
-                float deltaY=event.getRawY()-mLastY;
-                mLastY=event.getRawY();
+                float totalDistance = event.getRawY() - mFirstY;
+                float deltaY = event.getRawY() - mLastY;
+                mLastY = event.getRawY();
 //                if (Math.abs(deltaY) < touchSlop) {
 //                    Log.e(TAG,deltaY+"=============Math.abs(deltaY) < touchSlop============="+touchSlop);
 //                    return false;
 //                }
-                if(currentStatus==STATUS_REFRESHING){
+                if (currentStatus == STATUS_REFRESHING) {
                     //如果正在刷新
-                    if(getScrollY()<=0&&isTop){
+                    if (getScrollY() <= 0 && isTop) {
                         //说明头部显示，自己处理滑动，无论上滑下滑均同步移动（==0代表滑动到顶部可以继续下拉）
-                        if(deltaY<0){//来回按住上下移动：下拉逐渐增加难度，上拉不变
-                            ratio=DEFAULT_RATIO;
-                        }else{
-                            ratio-=0.01;//逐步增加下拉难度
+                        if (deltaY < 0) {//来回按住上下移动：下拉逐渐增加难度，上拉不变
+                            ratio = DEFAULT_RATIO;
+                        } else {
+                            ratio -= 0.01;//逐步增加下拉难度
                         }
-                        int dy=(int)(deltaY*ratio);
-                        scrollBy(0,-dy);
+                        int dy = (int) (deltaY * ratio);
+                        scrollBy(0, -dy);
                         return true;
-                    }else{
-                        Log.e(TAG,getScrollY()+"+++");
+                    } else {
+                        Log.e(TAG, getScrollY() + "+++");
                         //问题：来回拖住不放，当滑上去的时候，列表会突然蹦到第二条
-                        if(getScrollY()>0){
-                            scrollTo(0,0);
+                        if (getScrollY() > 0) {
+                            scrollTo(0, 0);
                         }
                         return super.dispatchTouchEvent(event);
                     }
-                }else{
+                } else {
                     // 如果手指是上滑状态或者没到顶部，交给子view去滑动
                     if (totalDistance <= 0 || !isTop) {
-                        if(getScrollY()!=0){
-                            scrollTo(0,0);
-                            if(mView instanceof AbsListView){
-                                AbsListView absListView= (AbsListView) mView;
+                        if (getScrollY() != 0) {
+                            scrollTo(0, 0);
+                            if (mView instanceof AbsListView) {
+                                AbsListView absListView = (AbsListView) mView;
                                 absListView.setSelection(0);
-                            }else if(mView instanceof RecyclerView){
-                                RecyclerView recyclerView= (RecyclerView) mView;
+                            } else if (mView instanceof RecyclerView) {
+                                RecyclerView recyclerView = (RecyclerView) mView;
                                 recyclerView.scrollToPosition(0);
                             }
                         }
@@ -309,20 +310,20 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
                         currentStatus = STATUS_PULL_TO_REFRESH;
                     }
 //                    Log.e(TAG,deltaY+"#"+getScrollY());
-                    scrollBy(0,-(int)(deltaY*DEFAULT_RATIO));
+                    scrollBy(0, -(int) (deltaY * DEFAULT_RATIO));
                 }
                 break;
             case MotionEvent.ACTION_UP:
             default:
-                ratio=DEFAULT_RATIO;//重置
+                ratio = DEFAULT_RATIO;//重置
                 if (currentStatus == STATUS_RELEASE_TO_REFRESH) {
                     // 松手时如果是释放立即刷新状态，就去调用正在刷新的任务
                     backToTop();
                 } else if (currentStatus == STATUS_PULL_TO_REFRESH) {
                     // 松手时如果是下拉状态，就去调用隐藏下拉头的任务
                     hideHeader();
-                }else if(currentStatus==STATUS_REFRESHING){
-                    if(getScrollY() <= hideHeaderHeight){
+                } else if (currentStatus == STATUS_REFRESHING) {
+                    if (getScrollY() <= hideHeaderHeight) {
                         //回弹
                         backToTop();
                     }
@@ -343,22 +344,22 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
         return super.dispatchTouchEvent(event);
     }
 
-    private void backToTop(){
-        currentStatus=STATUS_REFRESHING;
+    private void backToTop() {
+        currentStatus = STATUS_REFRESHING;
         updateHeaderView();
-        mScroller.startScroll(0,getScrollY(),0,hideHeaderHeight-getScrollY());
+        mScroller.startScroll(0, getScrollY(), 0, hideHeaderHeight - getScrollY());
         invalidate();
-        if (mListener != null&&!isRefreshing) {
-            isRefreshing=true;
+        if (mListener != null && !isRefreshing) {
+            isRefreshing = true;
             mListener.onRefresh();
         }
     }
 
-    private void hideHeader(){
+    private void hideHeader() {
         currentStatus = STATUS_REFRESH_FINISHED;
-        isRefreshing=false;
+        isRefreshing = false;
         preferences.edit().putLong(UPDATED_AT + mId, System.currentTimeMillis()).commit();
-        mScroller.startScroll(0,getScrollY(),0,-getScrollY());
+        mScroller.startScroll(0, getScrollY(), 0, -getScrollY());
         invalidate();
     }
 
@@ -370,13 +371,14 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
             postInvalidate();
         }
     }
+
     /**
      * 根据当前View的滚动状态来设定 {@link #isTop}
      * 的值，每次都需要在触摸事件中第一个执行，这样可以判断出当前应该是滚动View，还是应该进行下拉。
      */
     private void judgeIsTop() {
-        if(mView instanceof AbsListView){
-            AbsListView absListView=(AbsListView)mView;
+        if (mView instanceof AbsListView) {
+            AbsListView absListView = (AbsListView) mView;
             View firstChild = absListView.getChildAt(0);//返回的是当前屏幕中的第一个子view，非整个列表
             if (firstChild != null) {
                 int firstVisiblePos = absListView.getFirstVisiblePosition();//不必完全可见，当前屏幕中第一个可见的子view在整个列表的位置
@@ -390,29 +392,30 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
                 // 如果ListView中没有元素，也应该允许下拉刷新
                 isTop = true;
             }
-        }else if(mView instanceof RecyclerView){
-            RecyclerView recyclerView= (RecyclerView) mView;
-            View firstChild=recyclerView.getLayoutManager().findViewByPosition(0);//firstChild不必须完全可见
-            View firstVisibleChild=recyclerView.getChildAt(0);//返回的是当前屏幕中的第一个子view，非整个列表
+        } else if (mView instanceof RecyclerView) {
+            RecyclerView recyclerView = (RecyclerView) mView;
+            View firstChild = recyclerView.getLayoutManager().findViewByPosition(0);//firstChild不必须完全可见
+            View firstVisibleChild = recyclerView.getChildAt(0);//返回的是当前屏幕中的第一个子view，非整个列表
 //            if(firstChild!=null){
 //                Log.e("tianbin",firstChild.getTop()+"==="+recyclerView.getChildAt(0).getTop());
 //            }else{
 //                Log.e("tianbin","+++++++++");
 //            }
-            if(firstVisibleChild!=null){
-                if(firstChild!=null&&firstChild.getTop()==0){
-                    isTop=true;
-                }else{
-                    isTop=false;
+            if (firstVisibleChild != null) {
+                if (firstChild != null && firstChild.getTop() == 0) {
+                    isTop = true;
+                } else {
+                    isTop = false;
                 }
-            }else{
+            } else {
                 //没有元素也允许刷新
-                isTop=true;
+                isTop = true;
             }
-        }else{
-            isTop=true;
+        } else {
+            isTop = true;
         }
     }
+
     /**
      * 刷新下拉头中上次更新时间的文字描述。
      */
@@ -455,8 +458,7 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
     /**
      * 使当前线程睡眠指定的毫秒数。
      *
-     * @param time
-     *            指定当前线程睡眠多久，以毫秒为单位
+     * @param time 指定当前线程睡眠多久，以毫秒为单位
      */
     private void sleeping(int time) {
         try {
@@ -477,14 +479,13 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
         void onRefresh();
 
     }
+
     /**
      * 给下拉刷新控件注册一个监听器。
      *
-     * @param listener
-     *            监听器的实现。
-     * @param id
-     *            为了防止不同界面的下拉刷新在上次更新时间上互相有冲突， 请不同界面在注册下拉刷新监听器时一定要传入不同的id。
-     *            如果不用时间则可以不传递此参数
+     * @param listener 监听器的实现。
+     * @param id       为了防止不同界面的下拉刷新在上次更新时间上互相有冲突， 请不同界面在注册下拉刷新监听器时一定要传入不同的id。
+     *                 如果不用时间则可以不传递此参数
      */
     public void setOnRefreshListener(PullToRefreshListener listener, int id) {
         mListener = listener;
@@ -494,11 +495,10 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
     /**
      * 给下拉刷新控件注册一个监听器。
      *
-     * @param listener
-     *            监听器的实现。
+     * @param listener 监听器的实现。
      */
     public void setOnRefreshListener(PullToRefreshListener listener) {
-        setOnRefreshListener(listener,mId);
+        setOnRefreshListener(listener, mId);
     }
 
     /**
@@ -512,6 +512,7 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout{
             }
         });
     }
+
     /**
      * 更新下拉头中的信息。
      */

@@ -5,25 +5,25 @@ import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Message;
 import android.preference.PreferenceManager;
 import android.support.annotation.RequiresApi;
-import android.support.v4.view.NestedScrollingChild;
-import android.support.v4.view.NestedScrollingChildHelper;
 import android.support.v4.view.NestedScrollingParent;
 import android.support.v4.view.NestedScrollingParentHelper;
 import android.support.v4.view.ViewCompat;
+import android.support.v7.widget.RecyclerView;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
+import android.view.ViewGroup;
 import android.view.animation.RotateAnimation;
+import android.widget.AbsListView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.Scroller;
 import android.widget.TextView;
 
 import com.binbin.pulltorefreshandpushtoloadview.R;
@@ -31,14 +31,13 @@ import com.binbin.pulltorefreshandpushtoloadview.R;
 /**
  * Created by -- on 2016/11/2.
  * 自定义下拉刷新上拉加载的基类，可以扩展多种可滑动view(ListView,GridView,RecyclerView...)
+ * 第四版：采用NestedScrolling滑动嵌套机制进行优化
  */
 
-public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements NestedScrollingParent,NestedScrollingChild, View.OnTouchListener {
-    private NestedScrollingChildHelper mNestedScrollingChildHelper;
-    private NestedScrollingParentHelper mNestedScrollingParentHelper;
-    private final int[] mParentScrollConsumed = new int[2];
-    private final int[] mParentOffsetInWindow = new int[2];
-
+public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements NestedScrollingParent{
+    private static final String TAG="tianbin";
+    private NestedScrollingParentHelper parentHelper;
+    private Scroller mScroller;
     private Context mContext;
     /**
      * 在被判定为滚动之前用户手指可以移动的最大值。
@@ -65,9 +64,9 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
     private View header;
 
     /**
-     * 需要去下拉刷新的ListView
+     * 需要去下拉刷新的View
      */
-    private ListView listView;
+    private ViewGroup mView;
 
     /**
      * 刷新时显示的进度条
@@ -88,11 +87,6 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
      * 上次更新时间的文字描述
      */
     private TextView updateAt;
-
-    /**
-     * 下拉头的布局参数
-     */
-    private MarginLayoutParams headerLayoutParams;
 
     /**
      * 上次更新时间的毫秒值
@@ -138,9 +132,13 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
      */
     private boolean isTop;
     /**
-     * 手指按下时的屏幕纵坐标
+     * 上次手指按下时的屏幕纵坐标
      */
-    private float yDown;
+    private float mLastY=-1;
+    /**
+     * 第一次手指按下时的屏幕纵坐标
+     */
+    private float mFirstY=-1;
     /**
      * 当前处理什么状态，可选值有STATUS_PULL_TO_REFRESH, STATUS_RELEASE_TO_REFRESH,
      * STATUS_REFRESHING 和 STATUS_REFRESH_FINISHED
@@ -191,41 +189,9 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
      */
     private float ratio=DEFAULT_RATIO;
 
-    private float mLastDistance;
+    private int screenHeight;
 
-    /**
-     * 头部正在被拖动
-     */
-    private static final int HANDLER_ACTION_UPDATING_HEADER=0;
-    /**
-     * 头部显示
-     */
-    private static final int HANDLER_ACTION_UPDATE_HEADER_END_SHOW=1;
-    /**
-     * 头部隐藏
-     */
-    private static final int HANDLER_ACTION_UPDATE_HEADER_END_HIDE=2;
-
-    private Handler handler=new Handler(Looper.getMainLooper()){
-        @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            switch (msg.what){
-                case HANDLER_ACTION_UPDATE_HEADER_END_HIDE:
-                    updateHeader((int)msg.obj);
-                    preferences.edit().putLong(UPDATED_AT + mId, System.currentTimeMillis()).commit();
-                    break;
-                case HANDLER_ACTION_UPDATE_HEADER_END_SHOW:
-                    updateHeader((int)msg.obj);
-                    updateHeaderView();
-                    break;
-                case HANDLER_ACTION_UPDATING_HEADER:
-                    updateHeader((int)msg.obj);
-                    break;
-            }
-        }
-    };
-
+    private Handler handler=new Handler(Looper.getMainLooper());
 
     public PullToRefreshAndPushToLoadView4(Context context) {
         this(context,null);
@@ -248,6 +214,8 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
 
     private void init(Context mContext){
         this.mContext=mContext;
+        mScroller=new Scroller(mContext);
+        screenHeight=getResources().getDisplayMetrics().heightPixels;
         preferences = PreferenceManager.getDefaultSharedPreferences(mContext);
         header = LayoutInflater.from(mContext).inflate(R.layout.refresh_header, null, true);
         progressBar = (ProgressBar) header.findViewById(R.id.progress_bar);
@@ -255,13 +223,25 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
         description = (TextView) header.findViewById(R.id.description);
         updateAt = (TextView) header.findViewById(R.id.updated_at);
         touchSlop = ViewConfiguration.get(mContext).getScaledTouchSlop();
-        mNestedScrollingParentHelper = new NestedScrollingParentHelper(this);
-        mNestedScrollingChildHelper = new NestedScrollingChildHelper(this);
-        setNestedScrollingEnabled(true);
+        parentHelper=new NestedScrollingParentHelper(this);
         refreshUpdatedAtValue();
         setOrientation(VERTICAL);
         addView(header, 0);
     }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+
+        int measuredWidth = MeasureSpec.getSize(widthMeasureSpec);
+        int measuredHeight = MeasureSpec.getSize(heightMeasureSpec);
+        //为ViewGroup设置宽高
+        setMeasuredDimension(measuredWidth,measuredHeight);
+
+        // 计算出所有的childView的宽和高---可用
+        measureChildren(widthMeasureSpec, heightMeasureSpec);
+    }
+
     /**
      * 进行一些关键性的初始化操作，比如：将下拉头向上偏移进行隐藏，给ListView注册touch事件。
      */
@@ -270,185 +250,174 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
         super.onLayout(changed, l, t, r, b);
         if (changed && !loadOnce) {
             hideHeaderHeight = -header.getHeight();
-            headerLayoutParams = (MarginLayoutParams) header.getLayoutParams();
-            headerLayoutParams.topMargin = hideHeaderHeight;
-            listView = (ListView) getChildAt(1);
-            listView.setOnTouchListener(this);
+            mView = (ViewGroup) getChildAt(1);
             loadOnce = true;
         }
+        header.layout(0,hideHeaderHeight,r,0);
+        mView.layout(0,0,r,b);
+    }
+
+//    @Override
+//    public boolean dispatchTouchEvent(MotionEvent event) {
+//        judgeIsTop();//每次首先进行判断
+//        if(mView instanceof RecyclerView){
+//            recyclerView= (RecyclerView) mView;
+//        }
+//        switch (event.getAction()){
+//            case MotionEvent.ACTION_DOWN:
+//                mLastY=event.getY();
+//                mFirstY=event.getY();
+//                break;
+//            case MotionEvent.ACTION_MOVE:
+//                float totalDistance=event.getY()-mFirstY;
+//                float deltaY=event.getY()-mLastY;
+//                mLastY=event.getY();
+////                if (Math.abs(deltaY) < touchSlop) {
+////                    Log.e(TAG,deltaY+"=============Math.abs(deltaY) < touchSlop============="+touchSlop);
+////                    return false;
+////                }
+//                if(currentStatus==STATUS_REFRESHING){
+//                    //如果正在刷新
+//                    if(getScrollY()<=0&&isTop){
+//                        //说明头部显示，自己处理滑动，无论上滑下滑均同步移动（==0代表滑动到顶部可以继续下拉）
+//                        if(deltaY<0){//来回按住上下移动：下拉逐渐增加难度，上拉不变
+//                            ratio=DEFAULT_RATIO;
+//                        }else{
+//                            ratio-=0.01;//逐步增加下拉难度
+//                        }
+//                        int dy=(int)(deltaY*ratio);
+//                        scrollBy(0,-dy);
+//                        return true;
+//                    }else{
+//                        Log.e(TAG,getScrollY()+"+++");
+//                        //问题：来回拖住不放，当滑上去的时候，列表会突然蹦到第二条
+//                        if(getScrollY()>0){
+//                            scrollTo(0,0);
+//                        }
+//                        return super.dispatchTouchEvent(event);
+//                    }
+//                }else{
+//                    // 如果手指是上滑状态或者没到顶部，交给子view去滑动
+//                    if (totalDistance <= 0 || !isTop) {
+//                        stopNested();
+//                        return super.dispatchTouchEvent(event);
+//                    }
+//                    startNested();
+//                    //分发触屏事件给父类处理
+//                    Log.e(TAG,totalDistance+"XXXXXXXXXXXXX");
+//                    if (recyclerView.dispatchNestedPreScroll(0, (int)totalDistance, consumed, offsetInWindow)) {
+//                        Log.e(TAG,totalDistance+"YYYYYYYYYYYYYYY");
+//                        //减掉父类消耗的距离
+//                        deltaY -= consumed[1];
+//                    }
+//                    if (getScrollY() <= hideHeaderHeight) {
+//                        currentStatus = STATUS_RELEASE_TO_REFRESH;
+//                    } else {
+//                        currentStatus = STATUS_PULL_TO_REFRESH;
+//                    }
+////                    Log.e(TAG,deltaY+"#"+getScrollY());
+////                    offsetTopAndBottom((int) totalDistance);
+//                    scrollBy(0,-(int)(deltaY*DEFAULT_RATIO));
+//                }
+//                break;
+//            default:
+//                ratio=DEFAULT_RATIO;//重置
+//                if (currentStatus == STATUS_RELEASE_TO_REFRESH) {
+//                    // 松手时如果是释放立即刷新状态，就去调用正在刷新的任务
+//                    backToTop();
+//                } else if (currentStatus == STATUS_PULL_TO_REFRESH) {
+//                    // 松手时如果是下拉状态，就去调用隐藏下拉头的任务
+//                    hideHeader();
+//                }else if(currentStatus==STATUS_REFRESHING){
+//                    if(getScrollY() <= hideHeaderHeight){
+//                        //回弹
+//                        backToTop();
+//                    }
+//                }
+//                break;
+//        }
+//        // 时刻记得更新下拉头中的信息
+//        if (currentStatus == STATUS_PULL_TO_REFRESH || currentStatus == STATUS_RELEASE_TO_REFRESH) {
+//            updateHeaderView();
+//            // 当前正处于下拉或释放状态，要让ListView失去焦点，否则被点击的那一项会一直处于选中状态
+//            mView.setPressed(false);
+//            mView.setFocusable(false);
+//            mView.setFocusableInTouchMode(false);
+//            lastStatus = currentStatus;
+//            // 当前正处于下拉或释放状态，通过返回true屏蔽掉ListView的滚动事件
+//            return true;
+//        }
+//        return super.dispatchTouchEvent(event);
+//    }
+
+    private void backToTop(){
+        currentStatus=STATUS_REFRESHING;
+        updateHeaderView();
+        mScroller.startScroll(0,getScrollY(),0,hideHeaderHeight-getScrollY());
+        invalidate();
+        if (mListener != null&&!isRefreshing) {
+            isRefreshing=true;
+            mListener.onRefresh();
+        }
+    }
+
+    private void hideHeader(){
+        currentStatus = STATUS_REFRESH_FINISHED;
+        isRefreshing=false;
+        preferences.edit().putLong(UPDATED_AT + mId, System.currentTimeMillis()).commit();
+        mScroller.startScroll(0,getScrollY(),0,-getScrollY());
+        invalidate();
     }
 
     @Override
-    public boolean onTouch(View v, MotionEvent event) {
-        setIsTop();
-        switch (event.getAction()){
-            case MotionEvent.ACTION_DOWN:
-                yDown=event.getRawY();
-                break;
-            case MotionEvent.ACTION_MOVE:
-                float yMove = event.getRawY();
-                float distance = yMove - yDown;//滑动的总距离
-//                yDown=event.getRawY();
-                float deltaY=distance-mLastDistance;
-                mLastDistance=distance;
-                if (distance < touchSlop) {
-                    return false;
-                }
-                if(currentStatus==STATUS_REFRESHING){
-//                    Log.e("tianbin",distance+"###"+headerLayoutParams.topMargin+"###"+isTop+"###"+deltaY);
-                    //如果正在刷新
-                    if(isTop){
-                        if(deltaY<=0){
-                            //说明此时头部显示，并且向上滑动，则逐渐隐藏头部
-                            headerLayoutParams.topMargin+=deltaY*DEFAULT_RATIO;
-                        }else{
-                            ratio-=0.01;//逐步增加下拉难度
-                            headerLayoutParams.topMargin += deltaY * ratio;
-//                            headerLayoutParams.topMargin = (int)(distance * ratio);
-                        }
-                    }
-                    header.setLayoutParams(headerLayoutParams);
-                    return true;
-                }else{
-                    // 如果手指是上滑状态，并且下拉头是完全隐藏的，就屏蔽下拉事件
-                    if (distance <= 0 && headerLayoutParams.topMargin <= hideHeaderHeight) {
-                        return false;
-                    }
-                    if (headerLayoutParams.topMargin > 0) {
-                        currentStatus = STATUS_RELEASE_TO_REFRESH;
-                    } else {
-                        currentStatus = STATUS_PULL_TO_REFRESH;
-                    }
-                    // 通过偏移下拉头的topMargin值，来实现下拉效果
-                    headerLayoutParams.topMargin += deltaY * DEFAULT_RATIO;
-//                    headerLayoutParams.topMargin = (int)(distance * DEFAULT_RATIO) + hideHeaderHeight;
-                    header.setLayoutParams(headerLayoutParams);
-                }
-                break;
-            case MotionEvent.ACTION_UP:
-            default:
-                ratio=DEFAULT_RATIO;//重置
-                mLastDistance=0;
-                if (currentStatus == STATUS_RELEASE_TO_REFRESH) {
-                    // 松手时如果是释放立即刷新状态，就去调用正在刷新的任务
-                    backToTop();
-                } else if (currentStatus == STATUS_PULL_TO_REFRESH) {
-                    // 松手时如果是下拉状态，就去调用隐藏下拉头的任务
-                    hideHeader();
-                }else if(currentStatus==STATUS_REFRESHING){
-                    if(headerLayoutParams.topMargin>0){
-                        //回弹
-                        backToTop();
-                    }
-                }
-                break;
+    public void computeScroll() {
+        // TODO Auto-generated method stub
+        if (mScroller.computeScrollOffset()) {
+            scrollTo(mScroller.getCurrX(), mScroller.getCurrY());
+            postInvalidate();
         }
-        // 时刻记得更新下拉头中的信息
-        if (currentStatus == STATUS_PULL_TO_REFRESH || currentStatus == STATUS_RELEASE_TO_REFRESH) {
-            updateHeaderView();
-            // 当前正处于下拉或释放状态，要让ListView失去焦点，否则被点击的那一项会一直处于选中状态
-            listView.setPressed(false);
-            listView.setFocusable(false);
-            listView.setFocusableInTouchMode(false);
-            lastStatus = currentStatus;
-            // 当前正处于下拉或释放状态，通过返回true屏蔽掉ListView的滚动事件
-            return true;
-        }
-        return false;
     }
-
     /**
-     * 时时更新头部位置
-     * @param top
+     * 根据当前View的滚动状态来设定 {@link #isTop}
+     * 的值，每次都需要在触摸事件中第一个执行，这样可以判断出当前应该是滚动View，还是应该进行下拉。
      */
-    private void updateHeader(int top){
-        headerLayoutParams.topMargin = top;
-        header.setLayoutParams(headerLayoutParams);
-    }
-
-    /**
-     * 正在刷新，回弹到顶部
-     */
-    private void backToTop() {
-        new Thread(){
-            @Override
-            public void run() {
-                super.run();
-                int topMargin = headerLayoutParams.topMargin;
-                while (true) {
-                    topMargin = topMargin + SCROLL_SPEED;
-                    if (topMargin <= 0) {
-                        topMargin = 0;
-                        break;
-                    }
-                    Message msg=handler.obtainMessage();
-                    msg.obj=topMargin;
-                    msg.what=HANDLER_ACTION_UPDATING_HEADER;
-                    handler.sendMessage(msg);
-                    sleeping(10);
+    private void judgeIsTop() {
+        if(mView instanceof AbsListView){
+            AbsListView absListView=(AbsListView)mView;
+            View firstChild = absListView.getChildAt(0);//返回的是当前屏幕中的第一个子view，非整个列表
+            if (firstChild != null) {
+                int firstVisiblePos = absListView.getFirstVisiblePosition();//不必完全可见，当前屏幕中第一个可见的子view在整个列表的位置
+                if (firstVisiblePos == 0 && firstChild.getTop() == 0) {
+                    // 如果首个元素的上边缘，距离父布局值为0，就说明ListView滚动到了最顶部，此时应该允许下拉刷新
+                    isTop = true;
+                } else {
+                    isTop = false;
                 }
-                currentStatus = STATUS_REFRESHING;
-                Message msg=handler.obtainMessage();
-                msg.obj=0;
-                msg.what=HANDLER_ACTION_UPDATE_HEADER_END_SHOW;
-                handler.sendMessage(msg);
-                if (mListener != null&&!isRefreshing) {
-                    isRefreshing=true;
-                    mListener.onRefresh();
-                }
-            }
-        }.start();
-    }
-
-    /**
-     * 隐藏下拉头的任务，当未进行下拉刷新或下拉刷新完成后，此任务将会使下拉头重新隐藏。
-     */
-    private void hideHeader(){
-        new Thread(){
-            @Override
-            public void run() {
-                super.run();
-                int topMargin = headerLayoutParams.topMargin;
-                while (true) {
-                    topMargin = topMargin + SCROLL_SPEED;
-                    if (topMargin <= hideHeaderHeight) {
-                        topMargin = hideHeaderHeight;
-                        break;
-                    }
-                    Message msg=handler.obtainMessage();
-                    msg.obj=topMargin;
-                    msg.what=HANDLER_ACTION_UPDATING_HEADER;
-                    handler.sendMessage(msg);
-                    sleeping(10);
-                }
-
-                currentStatus = STATUS_REFRESH_FINISHED;
-                isRefreshing=false;
-                Message msg=handler.obtainMessage();
-                msg.obj=hideHeaderHeight;
-                msg.what=HANDLER_ACTION_UPDATE_HEADER_END_HIDE;
-                handler.sendMessage(msg);
-            }
-        }.start();
-    }
-
-    /**
-     * 根据当前ListView的滚动状态来设定 {@link #isTop}
-     * 的值，每次都需要在onTouch中第一个执行，这样可以判断出当前应该是滚动ListView，还是应该进行下拉。
-     */
-    private void setIsTop() {
-        View firstChild = listView.getChildAt(0);
-        if (firstChild != null) {
-            int firstVisiblePos = listView.getFirstVisiblePosition();
-            if (firstVisiblePos == 0 && firstChild.getTop() == 0) {
-                // 如果首个元素的上边缘，距离父布局值为0，就说明ListView滚动到了最顶部，此时应该允许下拉刷新
-                isTop = true;
             } else {
-                isTop = false;
+                // 如果ListView中没有元素，也应该允许下拉刷新
+                isTop = true;
             }
-        } else {
-            // 如果ListView中没有元素，也应该允许下拉刷新
-            isTop = true;
+        }else if(mView instanceof RecyclerView){
+            RecyclerView recyclerView= (RecyclerView) mView;
+            View firstChild=recyclerView.getLayoutManager().findViewByPosition(0);//firstChild不必须完全可见
+            View firstVisibleChild=recyclerView.getChildAt(0);//返回的是当前屏幕中的第一个子view，非整个列表
+//            if(firstChild!=null){
+//                Log.e("tianbin",firstChild.getTop()+"==="+recyclerView.getChildAt(0).getTop());
+//            }else{
+//                Log.e("tianbin","+++++++++");
+//            }
+            if(firstVisibleChild!=null){
+                if(firstChild!=null&&firstChild.getTop()==0){
+                    isTop=true;
+                }else{
+                    isTop=false;
+                }
+            }else{
+                //没有元素也允许刷新
+                isTop=true;
+            }
+        }else{
+            isTop=true;
         }
     }
     /**
@@ -543,7 +512,12 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
      * 当所有的刷新逻辑完成后，记录调用一下，否则你的ListView将一直处于正在刷新状态。
      */
     public void finishRefreshing() {
-        hideHeader();
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                hideHeader();
+            }
+        });
     }
     /**
      * 更新下拉头中的信息。
@@ -592,170 +566,76 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
     }
 
 
-    // NestedScrollingParent
-
     @Override
     public boolean onStartNestedScroll(View child, View target, int nestedScrollAxes) {
-        Log.e("tianbin","==========onStartNestedScroll============");
-        return isEnabled() && (nestedScrollAxes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0;
+        return true;
     }
 
     @Override
     public void onNestedScrollAccepted(View child, View target, int axes) {
-        Log.e("tianbin","==========onNestedScrollAccepted============");
-        // Reset the counter of how much leftover scroll needs to be consumed.
-        mNestedScrollingParentHelper.onNestedScrollAccepted(child, target, axes);
-        // Dispatch up to the nested parent
-        startNestedScroll(axes & ViewCompat.SCROLL_AXIS_VERTICAL);
-//        mTotalUnconsumed = 0;
-//        mNestedScrollInProgress = true;
+        parentHelper.onNestedScrollAccepted(child, target, axes);
     }
 
     @Override
-    public void onNestedPreScroll(View target, int dx, int dy, int[] consumed) {
-        Log.e("tianbin","==========onNestedPreScroll============");
-        // If we are in the middle of consuming, a scroll, then we want to move the spinner back up
-        // before allowing the list to scroll
-//        if (dy > 0 && mTotalUnconsumed > 0) {
-//            if (dy > mTotalUnconsumed) {
-//                consumed[1] = dy - (int) mTotalUnconsumed;
-//                mTotalUnconsumed = 0;
-//            } else {
-//                mTotalUnconsumed -= dy;
-//                consumed[1] = dy;
-//            }
-//            moveSpinner(mTotalUnconsumed);
-//        }
-
-        // If a client layout is using a custom start position for the circle
-        // view, they mean to hide it again before scrolling the child view
-        // If we get back to mTotalUnconsumed == 0 and there is more to go, hide
-        // the circle so it isn't exposed if its blocking content is moved
-//        if (mUsingCustomStart && dy > 0 && mTotalUnconsumed == 0
-//                && Math.abs(dy - consumed[1]) > 0) {
-//            mCircleView.setVisibility(View.GONE);
-//        }
-
-        // Now let our nested parent consume the leftovers
-        final int[] parentConsumed = mParentScrollConsumed;
-        if (dispatchNestedPreScroll(dx - consumed[0], dy - consumed[1], parentConsumed, null)) {
-            consumed[0] += parentConsumed[0];
-            consumed[1] += parentConsumed[1];
+    public void onStopNestedScroll(View child) {
+        parentHelper.onStopNestedScroll(child);
+        //手指放开
+        ratio=DEFAULT_RATIO;//重置
+        if (currentStatus == STATUS_RELEASE_TO_REFRESH) {
+            // 松手时如果是释放立即刷新状态，就去调用正在刷新的任务
+            backToTop();
+        } else if (currentStatus == STATUS_PULL_TO_REFRESH) {
+            // 松手时如果是下拉状态，就去调用隐藏下拉头的任务
+            hideHeader();
+        } else if (currentStatus == STATUS_REFRESHING) {
+            if (getScrollY() <= hideHeaderHeight) {
+                //回弹
+                backToTop();
+            }
         }
     }
 
     @Override
     public int getNestedScrollAxes() {
-        Log.e("tianbin","==========getNestedScrollAxes============");
-        return mNestedScrollingParentHelper.getNestedScrollAxes();
+        return parentHelper.getNestedScrollAxes();
     }
 
+    //子类滑动事件分发回调dispatchNestedPreScroll
     @Override
-    public void onStopNestedScroll(View target) {
-        Log.e("tianbin","==========onStopNestedScroll============");
-        mNestedScrollingParentHelper.onStopNestedScroll(target);
-//        mNestedScrollInProgress = false;
-        // Finish the spinner for nested scrolling if we ever consumed any
-        // unconsumed nested scroll
-//        if (mTotalUnconsumed > 0) {
-//            finishSpinner(mTotalUnconsumed);
-//            mTotalUnconsumed = 0;
-//        }
-        // Dispatch up our nested parent
-        stopNestedScroll();
-    }
-
-    @Override
-    public void onNestedScroll(final View target, final int dxConsumed, final int dyConsumed,
-                               final int dxUnconsumed, final int dyUnconsumed) {
-        Log.e("tianbin","==========onNestedScroll============");
-        // Dispatch up to the nested parent first
-        dispatchNestedScroll(dxConsumed, dyConsumed, dxUnconsumed, dyUnconsumed,
-                mParentOffsetInWindow);
-
-        // This is a bit of a hack. Nested scrolling works from the bottom up, and as we are
-        // sometimes between two nested scrolling views, we need a way to be able to know when any
-        // nested scrolling parent has stopped handling events. We do that by using the
-        // 'offset in window 'functionality to see if we have been moved from the event.
-        // This is a decent indication of whether we should take over the event stream or not.
-        final int dy = dyUnconsumed + mParentOffsetInWindow[1];
-        Log.e("tianbin",dy+"=======onNestedScroll========");
-//        if (dy < 0 && !canChildScrollUp()) {
-//            mTotalUnconsumed += Math.abs(dy);
-//            moveSpinner(mTotalUnconsumed);
-//        }
-    }
-
-    // NestedScrollingChild
-
-    @Override
-    public void setNestedScrollingEnabled(boolean enabled) {
-        Log.e("tianbin","==========setNestedScrollingEnabled============");
-        mNestedScrollingChildHelper.setNestedScrollingEnabled(enabled);
-    }
-
-    @Override
-    public boolean isNestedScrollingEnabled() {
-        Log.e("tianbin","==========isNestedScrollingEnabled============");
-        return mNestedScrollingChildHelper.isNestedScrollingEnabled();
-    }
-
-    @Override
-    public boolean startNestedScroll(int axes) {
-        Log.e("tianbin","==========startNestedScroll============");
-        return mNestedScrollingChildHelper.startNestedScroll(axes);
-    }
-
-    @Override
-    public void stopNestedScroll() {
-        Log.e("tianbin","==========stopNestedScroll============");
-        mNestedScrollingChildHelper.stopNestedScroll();
-    }
-
-    @Override
-    public boolean hasNestedScrollingParent() {
-        Log.e("tianbin","==========hasNestedScrollingParent============");
-        return mNestedScrollingChildHelper.hasNestedScrollingParent();
-    }
-
-    @Override
-    public boolean dispatchNestedScroll(int dxConsumed, int dyConsumed, int dxUnconsumed,
-                                        int dyUnconsumed, int[] offsetInWindow) {
-        Log.e("tianbin","==========dispatchNestedScroll============");
-        return mNestedScrollingChildHelper.dispatchNestedScroll(dxConsumed, dyConsumed,
-                dxUnconsumed, dyUnconsumed, offsetInWindow);
-    }
-
-    @Override
-    public boolean dispatchNestedPreScroll(int dx, int dy, int[] consumed, int[] offsetInWindow) {
-        Log.e("tianbin","==========dispatchNestedPreScroll============");
-        return mNestedScrollingChildHelper.dispatchNestedPreScroll(
-                dx, dy, consumed, offsetInWindow);
-    }
-
-    @Override
-    public boolean onNestedPreFling(View target, float velocityX,
-                                    float velocityY) {
-        Log.e("tianbin","==========onNestedPreFling============");
-        return dispatchNestedPreFling(velocityX, velocityY);
-    }
-
-    @Override
-    public boolean onNestedFling(View target, float velocityX, float velocityY,
-                                 boolean consumed) {
-        Log.e("tianbin","==========onNestedFling============");
-        return dispatchNestedFling(velocityX, velocityY, consumed);
-    }
-
-    @Override
-    public boolean dispatchNestedFling(float velocityX, float velocityY, boolean consumed) {
-        Log.e("tianbin","==========dispatchNestedFling============");
-        return mNestedScrollingChildHelper.dispatchNestedFling(velocityX, velocityY, consumed);
-    }
-
-    @Override
-    public boolean dispatchNestedPreFling(float velocityX, float velocityY) {
-        Log.e("tianbin","==========dispatchNestedPreFling============");
-        return mNestedScrollingChildHelper.dispatchNestedPreFling(velocityX, velocityY);
+    public void onNestedPreScroll(View target, int dx, int dy, int[] consumed) {
+        judgeIsTop();
+        Log.e(TAG,dy+"####onNestedPreScroll####"+consumed[1]+"#"+getScrollY()+"#"+isTop);
+        boolean showTop=dy<0 && isTop;
+        boolean hideTop=dy>0 && getScrollY()<0;
+        if(showTop||hideTop){
+            if(showTop){
+                //正在刷新的过程中逐渐增加下拉难度
+                ratio=(currentStatus==STATUS_REFRESHING)?(ratio/**-0.01f*/):DEFAULT_RATIO;
+                dy=(int)(dy*ratio);
+            }
+            scrollBy(0,dy);
+            if(getScrollY()>0){
+                //有时候会出现大于0的情况，不知道为什么，所以加个判断
+                setScrollY(0);
+            }
+            consumed[1]=dy;
+        }
+        if(currentStatus!=STATUS_REFRESHING){
+            if (getScrollY() <= hideHeaderHeight) {
+                currentStatus = STATUS_RELEASE_TO_REFRESH;
+            } else {
+                currentStatus = STATUS_PULL_TO_REFRESH;
+            }
+            // 时刻记得更新下拉头中的信息
+            if (currentStatus == STATUS_PULL_TO_REFRESH || currentStatus == STATUS_RELEASE_TO_REFRESH) {
+                updateHeaderView();
+                // 当前正处于下拉或释放状态，要让ListView失去焦点，否则被点击的那一项会一直处于选中状态
+                mView.setPressed(false);
+                mView.setFocusable(false);
+                mView.setFocusableInTouchMode(false);
+                lastStatus = currentStatus;
+                // 当前正处于下拉或释放状态，通过返回true屏蔽掉ListView的滚动事件
+            }
+        }
     }
 }

@@ -13,10 +13,11 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView3;
+import com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView4;
 
 public class RecyclerViewActivity extends AppCompatActivity {
 
-    private PullToRefreshAndPushToLoadView3 pullToRefreshAndPushToLoadView;
+    private PullToRefreshAndPushToLoadView4 pullToRefreshAndPushToLoadView;
     private RecyclerView recyclerView;
     private String[] items = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"};
     private MyAdapter adapter;
@@ -25,17 +26,18 @@ public class RecyclerViewActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.recycler_activity_main);
-        pullToRefreshAndPushToLoadView = (PullToRefreshAndPushToLoadView3) findViewById(R.id.prpt);
+        pullToRefreshAndPushToLoadView = (PullToRefreshAndPushToLoadView4) findViewById(R.id.prpt);
         recyclerView = (RecyclerView) findViewById(R.id.rv);
 //        items=new String[]{};
         adapter = new MyAdapter(items,this);
         recyclerView.setAdapter(adapter);
+        recyclerView.setHasFixedSize(true);
         LinearLayoutManager layoutManager=new GridLayoutManager(this,2);
 //        LinearLayoutManager layoutManager=new LinearLayoutManager(this);
         recyclerView.setLayoutManager(layoutManager);
         recyclerView.addItemDecoration(new DividerItemDecoration(this,layoutManager.getOrientation()));
         recyclerView.setItemAnimator(new DefaultItemAnimator());
-        pullToRefreshAndPushToLoadView.setOnRefreshListener(new PullToRefreshAndPushToLoadView3.PullToRefreshListener() {
+        pullToRefreshAndPushToLoadView.setOnRefreshListener(new PullToRefreshAndPushToLoadView4.PullToRefreshListener() {
             @Override
             public void onRefresh() {
                 refresh();
