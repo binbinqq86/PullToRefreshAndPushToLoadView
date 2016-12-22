@@ -580,6 +580,7 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
     public void onStopNestedScroll(View child) {
         parentHelper.onStopNestedScroll(child);
         //手指放开
+        Log.e(TAG, "onStopNestedScroll: "+getScrollY() );
         ratio=DEFAULT_RATIO;//重置
         if (currentStatus == STATUS_RELEASE_TO_REFRESH) {
             // 松手时如果是释放立即刷新状态，就去调用正在刷新的任务
@@ -613,11 +614,13 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
                 ratio=(currentStatus==STATUS_REFRESHING)?(ratio/**-0.01f*/):DEFAULT_RATIO;
                 dy=(int)(dy*ratio);
             }
-            scrollBy(0,dy);
-            if(getScrollY()>0){
-                //有时候会出现大于0的情况，不知道为什么，所以加个判断
-                setScrollY(0);
+//            Log.e(TAG, "onNestedPreScroll: "+dy+"#"+getScrollY()+"AAAAAAAAAAAAAA");
+            if(hideTop&&dy>Math.abs(getScrollY())){
+                //当滑动距离大于可滚动距离时，进行调整
+                dy=Math.abs(getScrollY());
             }
+            scrollBy(0,dy);
+//            Log.e(TAG, "onNestedPreScroll: "+dy+"#"+getScrollY()+"BBBBBBBBBBBBBB");
             consumed[1]=dy;
         }
         if(currentStatus!=STATUS_REFRESHING){

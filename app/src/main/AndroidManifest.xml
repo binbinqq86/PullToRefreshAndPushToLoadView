@@ -18,6 +18,7 @@
         <activity android:name=".ListViewActivity"></activity>
         <activity android:name=".GridViewActivity"></activity>
         <activity android:name=".RecyclerViewActivity"></activity>
+        <activity android:name=".RecyclerViewActivity2"></activity>
     </application>
 
 </manifest>

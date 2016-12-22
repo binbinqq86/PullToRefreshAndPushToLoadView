@@ -258,61 +258,53 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
         judgeIsTop();//每次首先进行判断
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                mLastY = event.getRawY();
-                mFirstY = event.getRawY();
+                mLastY = event.getY();
+                mFirstY = event.getY();
                 break;
             case MotionEvent.ACTION_MOVE:
-                float totalDistance = event.getRawY() - mFirstY;
-                float deltaY = event.getRawY() - mLastY;
-                mLastY = event.getRawY();
+//                float totalDistance = event.getY() - mFirstY;
+                float deltaY = event.getY() - mLastY;
+                mLastY = event.getY();
 //                if (Math.abs(deltaY) < touchSlop) {
 //                    Log.e(TAG,deltaY+"=============Math.abs(deltaY) < touchSlop============="+touchSlop);
 //                    return false;
 //                }
-                if (currentStatus == STATUS_REFRESHING) {
-                    //如果正在刷新
-                    if (getScrollY() <= 0 && isTop) {
-                        //说明头部显示，自己处理滑动，无论上滑下滑均同步移动（==0代表滑动到顶部可以继续下拉）
-                        if (deltaY < 0) {//来回按住上下移动：下拉逐渐增加难度，上拉不变
-                            ratio = DEFAULT_RATIO;
+                boolean showTop=deltaY>0 && isTop;
+                boolean hideTop=deltaY<0 && getScrollY()<0;
+                boolean noMove=deltaY==0;//当不动的时候屏蔽一切事件，防止列表滚动
+                Log.e(TAG, "dispatchTouchEvent: "+isTop+"###"+getScrollY()+"$$$"+deltaY);
+                if (showTop||hideTop||noMove) {
+                    //说明头部显示，自己处理滑动，无论上滑下滑均同步移动（==0代表滑动到顶部可以继续下拉）
+                    if (deltaY < 0) {//来回按住上下移动：下拉逐渐增加难度，上拉不变
+                        ratio = DEFAULT_RATIO;
+                    } else {
+                        ratio -= 0.01f;//逐步增加下拉难度
+                    }
+                    int dy=(int) (deltaY * ratio);
+                    if(hideTop&&Math.abs(dy)>Math.abs(getScrollY())){
+                        //当滑动距离大于可滚动距离时，进行调整
+                        dy=-Math.abs(getScrollY());
+                    }
+                    scrollBy(0, -dy);
+                    if (currentStatus != STATUS_REFRESHING){
+                        if (getScrollY() <= hideHeaderHeight) {
+                            currentStatus = STATUS_RELEASE_TO_REFRESH;
                         } else {
-                            ratio -= 0.01;//逐步增加下拉难度
+                            currentStatus = STATUS_PULL_TO_REFRESH;
                         }
-                        int dy = (int) (deltaY * ratio);
-                        scrollBy(0, -dy);
-                        return true;
-                    } else {
-                        Log.e(TAG, getScrollY() + "+++");
-                        //问题：来回拖住不放，当滑上去的时候，列表会突然蹦到第二条
-                        if (getScrollY() > 0) {
-                            scrollTo(0, 0);
-                        }
-                        return super.dispatchTouchEvent(event);
+                        // 时刻记得更新下拉头中的信息
+                        updateHeaderView();
+                        // 当前正处于下拉或释放状态，要让ListView失去焦点，否则被点击的那一项会一直处于选中状态
+                        mView.setPressed(false);
+                        mView.setFocusable(false);
+                        mView.setFocusableInTouchMode(false);
+                        lastStatus = currentStatus;
                     }
-                } else {
-                    // 如果手指是上滑状态或者没到顶部，交给子view去滑动
-                    if (totalDistance <= 0 || !isTop) {
-                        if (getScrollY() != 0) {
-                            scrollTo(0, 0);
-                            if (mView instanceof AbsListView) {
-                                AbsListView absListView = (AbsListView) mView;
-                                absListView.setSelection(0);
-                            } else if (mView instanceof RecyclerView) {
-                                RecyclerView recyclerView = (RecyclerView) mView;
-                                recyclerView.scrollToPosition(0);
-                            }
-                        }
-                        return super.dispatchTouchEvent(event);
-                    }
-                    if (getScrollY() <= hideHeaderHeight) {
-                        currentStatus = STATUS_RELEASE_TO_REFRESH;
-                    } else {
-                        currentStatus = STATUS_PULL_TO_REFRESH;
-                    }
-//                    Log.e(TAG,deltaY+"#"+getScrollY());
-                    scrollBy(0, -(int) (deltaY * DEFAULT_RATIO));
+                    return true;
+                }else{
+                    return super.dispatchTouchEvent(event);
                 }
-                break;
+//                break;
             case MotionEvent.ACTION_UP:
             default:
                 ratio = DEFAULT_RATIO;//重置
@@ -329,17 +321,6 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
                     }
                 }
                 break;
-        }
-        // 时刻记得更新下拉头中的信息
-        if (currentStatus == STATUS_PULL_TO_REFRESH || currentStatus == STATUS_RELEASE_TO_REFRESH) {
-            updateHeaderView();
-            // 当前正处于下拉或释放状态，要让ListView失去焦点，否则被点击的那一项会一直处于选中状态
-            mView.setPressed(false);
-            mView.setFocusable(false);
-            mView.setFocusableInTouchMode(false);
-            lastStatus = currentStatus;
-            // 当前正处于下拉或释放状态，通过返回true屏蔽掉ListView的滚动事件
-            return true;
         }
         return super.dispatchTouchEvent(event);
     }

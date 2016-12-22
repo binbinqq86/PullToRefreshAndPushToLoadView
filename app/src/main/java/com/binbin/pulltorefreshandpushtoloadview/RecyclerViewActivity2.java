@@ -1,8 +1,8 @@
 package com.binbin.pulltorefreshandpushtoloadview;
 
 import android.content.Context;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
@@ -15,9 +15,9 @@ import android.widget.TextView;
 import com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView3;
 import com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView4;
 
-public class RecyclerViewActivity extends AppCompatActivity {
+public class RecyclerViewActivity2 extends AppCompatActivity {
 
-    private PullToRefreshAndPushToLoadView3 pullToRefreshAndPushToLoadView;
+    private PullToRefreshAndPushToLoadView4 pullToRefreshAndPushToLoadView;
     private RecyclerView recyclerView;
     private String[] items = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"};
     private MyAdapter adapter;
@@ -25,8 +25,8 @@ public class RecyclerViewActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.recycler_activity_main);
-        pullToRefreshAndPushToLoadView = (PullToRefreshAndPushToLoadView3) findViewById(R.id.prpt);
+        setContentView(R.layout.recycler_activity_main2);
+        pullToRefreshAndPushToLoadView = (PullToRefreshAndPushToLoadView4) findViewById(R.id.prpt);
         recyclerView = (RecyclerView) findViewById(R.id.rv);
 //        items=new String[]{};
         adapter = new MyAdapter(items,this);
@@ -37,7 +37,7 @@ public class RecyclerViewActivity extends AppCompatActivity {
         recyclerView.setLayoutManager(layoutManager);
         recyclerView.addItemDecoration(new DividerItemDecoration(this,layoutManager.getOrientation()));
         recyclerView.setItemAnimator(new DefaultItemAnimator());
-        pullToRefreshAndPushToLoadView.setOnRefreshListener(new PullToRefreshAndPushToLoadView3.PullToRefreshListener() {
+        pullToRefreshAndPushToLoadView.setOnRefreshListener(new PullToRefreshAndPushToLoadView4.PullToRefreshListener() {
             @Override
             public void onRefresh() {
                 refresh();
