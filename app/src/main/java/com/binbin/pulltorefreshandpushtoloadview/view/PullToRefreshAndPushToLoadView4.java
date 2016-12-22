@@ -31,9 +31,9 @@ import com.binbin.pulltorefreshandpushtoloadview.R;
 /**
  * Created by -- on 2016/11/2.
  * 自定义下拉刷新上拉加载的基类，可以扩展多种可滑动view(ListView,GridView,RecyclerView...)
- * 第四版：采用NestedScrolling滑动嵌套机制进行优化
+ * 第四版：采用NestedScrolling滑动嵌套机制进行优化，不够灵活，局限性太多
  */
-
+@Deprecated
 public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements NestedScrollingParent{
     private static final String TAG="tianbin";
     private NestedScrollingParentHelper parentHelper;
@@ -183,7 +183,7 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
      */
     private boolean isRefreshing;
 
-    private static final float DEFAULT_RATIO=0.5f;
+    private static final float DEFAULT_RATIO=2f;
     /**
      * 拖动阻力系数
      */
@@ -606,38 +606,44 @@ public class PullToRefreshAndPushToLoadView4 extends LinearLayout implements Nes
     public void onNestedPreScroll(View target, int dx, int dy, int[] consumed) {
         judgeIsTop();
         Log.e(TAG,dy+"####onNestedPreScroll####"+consumed[1]+"#"+getScrollY()+"#"+isTop);
-        boolean showTop=dy<0 && isTop;
+        boolean showTop=dy<0 && isTop;//dy手指下滑负值
         boolean hideTop=dy>0 && getScrollY()<0;
-        if(showTop||hideTop){
-            if(showTop){
+        boolean noMove=dy==0;//当不动的时候屏蔽一切事件，防止列表滚动
+        if(showTop||hideTop||noMove){
+            if(dy<0){
                 //正在刷新的过程中逐渐增加下拉难度
-                ratio=(currentStatus==STATUS_REFRESHING)?(ratio/**-0.01f*/):DEFAULT_RATIO;
-                dy=(int)(dy*ratio);
+                if(Math.abs(getScrollY())>=-hideHeaderHeight){
+                    ratio+=0.05f;
+                }
+            }else{
+                ratio=1;
             }
+            dy=(int)(dy/ratio);
 //            Log.e(TAG, "onNestedPreScroll: "+dy+"#"+getScrollY()+"AAAAAAAAAAAAAA");
-            if(hideTop&&dy>Math.abs(getScrollY())){
+            if(hideTop && dy>Math.abs(getScrollY())){
                 //当滑动距离大于可滚动距离时，进行调整
                 dy=Math.abs(getScrollY());
+//                Log.e(TAG, "onNestedPreScroll: "+"+++++++++++++++++++++++++" );
             }
             scrollBy(0,dy);
-//            Log.e(TAG, "onNestedPreScroll: "+dy+"#"+getScrollY()+"BBBBBBBBBBBBBB");
             consumed[1]=dy;
-        }
-        if(currentStatus!=STATUS_REFRESHING){
-            if (getScrollY() <= hideHeaderHeight) {
-                currentStatus = STATUS_RELEASE_TO_REFRESH;
-            } else {
-                currentStatus = STATUS_PULL_TO_REFRESH;
-            }
-            // 时刻记得更新下拉头中的信息
-            if (currentStatus == STATUS_PULL_TO_REFRESH || currentStatus == STATUS_RELEASE_TO_REFRESH) {
-                updateHeaderView();
-                // 当前正处于下拉或释放状态，要让ListView失去焦点，否则被点击的那一项会一直处于选中状态
-                mView.setPressed(false);
-                mView.setFocusable(false);
-                mView.setFocusableInTouchMode(false);
-                lastStatus = currentStatus;
-                // 当前正处于下拉或释放状态，通过返回true屏蔽掉ListView的滚动事件
+//            Log.e(TAG, "onNestedPreScroll: "+dy+"#"+getScrollY()+"BBBBBBBBBBBBBB");
+            if(currentStatus!=STATUS_REFRESHING){
+                if (getScrollY() <= hideHeaderHeight) {
+                    currentStatus = STATUS_RELEASE_TO_REFRESH;
+                } else {
+                    currentStatus = STATUS_PULL_TO_REFRESH;
+                }
+                // 时刻记得更新下拉头中的信息
+                if (currentStatus == STATUS_PULL_TO_REFRESH || currentStatus == STATUS_RELEASE_TO_REFRESH) {
+                    updateHeaderView();
+                    // 当前正处于下拉或释放状态，要让ListView失去焦点，否则被点击的那一项会一直处于选中状态
+                    mView.setPressed(false);
+                    mView.setFocusable(false);
+                    mView.setFocusableInTouchMode(false);
+                    lastStatus = currentStatus;
+                    // 当前正处于下拉或释放状态，通过返回true屏蔽掉ListView的滚动事件
+                }
             }
         }
     }

@@ -166,11 +166,6 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
      */
     public static final int STATUS_REFRESH_FINISHED = 3;
     /**
-     * 下拉头部回滚的速度
-     */
-    public static final int SCROLL_SPEED = -20;
-
-    /**
      * 下拉刷新的回调接口
      */
     private PullToRefreshListener mListener;
@@ -180,7 +175,7 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
      */
     private boolean isRefreshing;
 
-    private static final float DEFAULT_RATIO = 0.5f;
+    private static final float DEFAULT_RATIO = 2f;
     /**
      * 拖动阻力系数
      */
@@ -272,20 +267,24 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
                 boolean showTop=deltaY>0 && isTop;
                 boolean hideTop=deltaY<0 && getScrollY()<0;
                 boolean noMove=deltaY==0;//当不动的时候屏蔽一切事件，防止列表滚动
-                Log.e(TAG, "dispatchTouchEvent: "+isTop+"###"+getScrollY()+"$$$"+deltaY);
+//                Log.e(TAG, "dispatchTouchEvent: "+ratio+"+++"+isTop+"###"+getScrollY()+"$$$"+deltaY);
                 if (showTop||hideTop||noMove) {
                     //说明头部显示，自己处理滑动，无论上滑下滑均同步移动（==0代表滑动到顶部可以继续下拉）
                     if (deltaY < 0) {//来回按住上下移动：下拉逐渐增加难度，上拉不变
-                        ratio = DEFAULT_RATIO;
+                        ratio = DEFAULT_RATIO;//此处如果增加系数，则会出现跳动的现象。。。
                     } else {
-                        ratio -= 0.01f;//逐步增加下拉难度
+                        if(Math.abs(getScrollY())>=-hideHeaderHeight){
+                            ratio += 0.05f;//当头部露出以后逐步增加下拉难度
+                        }
                     }
-                    int dy=(int) (deltaY * ratio);
-                    if(hideTop&&Math.abs(dy)>Math.abs(getScrollY())){
+                    int dy=(int) (deltaY / ratio);
+                    if(deltaY<0 && Math.abs(dy)>Math.abs(getScrollY())){
                         //当滑动距离大于可滚动距离时，进行调整
                         dy=-Math.abs(getScrollY());
                     }
+//                    Log.e(TAG, "dispatchTouchEvent: "+"###"+getScrollY()+"%%%"+dy);
                     scrollBy(0, -dy);
+//                    Log.e(TAG, "dispatchTouchEvent: "+"###"+getScrollY()+"&&&"+dy);
                     if (currentStatus != STATUS_REFRESHING){
                         if (getScrollY() <= hideHeaderHeight) {
                             currentStatus = STATUS_RELEASE_TO_REFRESH;
@@ -313,7 +312,7 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
                     backToTop();
                 } else if (currentStatus == STATUS_PULL_TO_REFRESH) {
                     // 松手时如果是下拉状态，就去调用隐藏下拉头的任务
-                    hideHeader();
+                    hideHeader(false);
                 } else if (currentStatus == STATUS_REFRESHING) {
                     if (getScrollY() <= hideHeaderHeight) {
                         //回弹
@@ -336,10 +335,14 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
         }
     }
 
-    private void hideHeader() {
+    private void hideHeader(boolean isRefreshFinished) {
         currentStatus = STATUS_REFRESH_FINISHED;
+        lastStatus=currentStatus;
         isRefreshing = false;
-        preferences.edit().putLong(UPDATED_AT + mId, System.currentTimeMillis()).commit();
+        if(isRefreshFinished){
+            //只有刷新完成才更新时间，反弹不算
+            preferences.edit().putLong(UPDATED_AT + mId, System.currentTimeMillis()).commit();
+        }
         mScroller.startScroll(0, getScrollY(), 0, -getScrollY());
         invalidate();
     }
@@ -350,6 +353,8 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
         if (mScroller.computeScrollOffset()) {
             scrollTo(mScroller.getCurrX(), mScroller.getCurrY());
             postInvalidate();
+        }else{//刷新动画完成以后初始化头部
+            updateHeaderView();
         }
     }
 
@@ -489,16 +494,16 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
         handler.post(new Runnable() {
             @Override
             public void run() {
-                hideHeader();
+                hideHeader(true);
             }
         });
     }
 
     /**
-     * 更新下拉头中的信息。
+     * 更新下拉头中的信息
      */
     private void updateHeaderView() {
-        if (lastStatus != currentStatus) {
+        if (lastStatus != currentStatus && lastStatus!=STATUS_REFRESH_FINISHED) {
             if (currentStatus == STATUS_PULL_TO_REFRESH) {
                 description.setText(getResources().getString(R.string.pull_to_refresh));
                 arrow.setVisibility(View.VISIBLE);
@@ -515,8 +520,14 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
                 arrow.clearAnimation();
                 arrow.setVisibility(View.GONE);
             }
-            refreshUpdatedAtValue();
+        }else if(currentStatus==STATUS_REFRESH_FINISHED&&lastStatus==STATUS_REFRESH_FINISHED){
+            //说明刷新完成或者第一次进入
+            description.setText(getResources().getString(R.string.pull_to_refresh));
+            arrow.clearAnimation();
+            arrow.setVisibility(View.VISIBLE);
+            progressBar.setVisibility(View.GONE);
         }
+        refreshUpdatedAtValue();
     }
 
     /**
@@ -535,7 +546,7 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
             toDegrees = 180f;
         }
         RotateAnimation animation = new RotateAnimation(fromDegrees, toDegrees, pivotX, pivotY);
-        animation.setDuration(100);
+        animation.setDuration(300);
         animation.setFillAfter(true);
         arrow.startAnimation(animation);
     }
