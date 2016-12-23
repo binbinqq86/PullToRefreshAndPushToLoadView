@@ -9,6 +9,7 @@ import android.preference.PreferenceManager;
 import android.support.annotation.RequiresApi;
 import android.support.v7.widget.RecyclerView;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -47,6 +48,10 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
      * 下拉头的高度
      */
     private int hideHeaderHeight;
+    /**
+     * 上拉底部的高度
+     */
+    private int hideFooterHeight;
 
     /**
      * 用于存储上次更新时间
@@ -57,12 +62,28 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
      * 下拉头的View
      */
     private View header;
+    /**
+     * 上拉底部的View
+     */
+    private View footer;
 
     /**
-     * 需要去下拉刷新的View
+     * 需要去刷新和加载的View
      */
     private ViewGroup mView;
+    /**
+     * 本控件的宽高
+     */
+    private int maxWidth,maxHeight;
 
+    /**
+     * footer的进度条
+     */
+    private ProgressBar pbFooter;
+    /**
+     * footer的文字描述
+     */
+    private TextView tvLoadMore;
     /**
      * 刷新时显示的进度条
      */
@@ -123,9 +144,13 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
     private int mId = -1;
 
     /**
-     * 当前是否可以下拉，只有ListView滚动到头的时候才允许下拉
+     * 当前是否在view的顶部，只有View滚动到头的时候才允许下拉
      */
     private boolean isTop;
+    /**
+     * 当前是否在view的底部，只有View滚动到底的时候才允许上拉
+     */
+    private boolean isBottom;
     /**
      * 上次手指按下时的屏幕纵坐标
      */
@@ -139,7 +164,6 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
      * STATUS_REFRESHING 和 STATUS_REFRESH_FINISHED
      */
     private int currentStatus = STATUS_REFRESH_FINISHED;
-    ;
 
     /**
      * 记录上一次的状态是什么，避免进行重复操作
@@ -164,11 +188,28 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
      * 刷新完成或未刷新状态
      */
     public static final int STATUS_REFRESH_FINISHED = 3;
+
+    /**
+     * 当前处理什么状态，STATUS_LOAD_NORMAL, STATUS_LOADING
+     */
+    private int currentFooterStatus=STATUS_LOAD_NORMAL;
+    /**
+     * 上拉状态
+     */
+    public static final int STATUS_LOAD_NORMAL = 4;
+    /**
+     * 正在加载状态
+     */
+    public static final int STATUS_LOADING = 5;
     /**
      * 下拉刷新上拉加载的回调接口
      */
     private PullToRefreshAndPushToLoadMoreListener mListener;
 
+    /**
+     * 是否正在加载
+     */
+    private boolean isLoading;
     /**
      * 是否正在刷新
      */
@@ -193,6 +234,11 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
      * 是否支持上拉加载
      */
     private boolean canLoadMore=true;
+
+    /**
+     * 是否支持滑动到底部自动加载更多
+     */
+    private boolean canAutoLoadMore=false;
 
     private Handler handler = new Handler(Looper.getMainLooper());
 
@@ -225,6 +271,11 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
         arrow = (ImageView) header.findViewById(R.id.arrow);
         description = (TextView) header.findViewById(R.id.description);
         updateAt = (TextView) header.findViewById(R.id.updated_at);
+
+        footer = LayoutInflater.from(mContext).inflate(R.layout.loadmore_footer, null, true);
+        pbFooter = (ProgressBar) footer.findViewById(R.id.pb);
+        tvLoadMore = (TextView) footer.findViewById(R.id.tv_load_more);
+
         touchSlop = ViewConfiguration.get(mContext).getScaledTouchSlop();
         refreshUpdatedAtValue();
         setOrientation(VERTICAL);
@@ -235,13 +286,17 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
-        int measuredWidth = MeasureSpec.getSize(widthMeasureSpec);
-        int measuredHeight = MeasureSpec.getSize(heightMeasureSpec);
+        for (int i = 0,count = getChildCount(); i < count; i++) {
+            View childView = getChildAt(i);
+            if(childView.getVisibility()!=View.GONE){
+                //获取每个子view的自己高度宽度，取最大的就是viewGroup的大小
+                measureChild(childView, widthMeasureSpec, heightMeasureSpec);
+                maxWidth = Math.max(maxWidth,childView.getMeasuredWidth());
+                maxHeight = Math.max(maxHeight,childView.getMeasuredHeight());
+            }
+        }
         //为ViewGroup设置宽高
-        setMeasuredDimension(measuredWidth, measuredHeight);
-
-        // 计算出所有的childView的宽和高---可用
-        measureChildren(widthMeasureSpec, heightMeasureSpec);
+        setMeasuredDimension(maxWidth, maxHeight);
     }
 
     /**
@@ -252,19 +307,46 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
         super.onLayout(changed, l, t, r, b);
         if (changed && !loadOnce) {
             hideHeaderHeight = -header.getHeight();
-            mView = (ViewGroup) getChildAt(1);
+//            Log.e(TAG, "onLayout: "+hideFooterHeight+"#"+hideHeaderHeight);
+            mView = (ViewGroup) getChildAt(1);//当找到mView以后，再去加上footer
+            addView(footer,-1);
             loadOnce = true;
+            return;
         }
-        header.layout(0, hideHeaderHeight, r, 0);
-        mView.layout(0, 0, r, b);
+        if(hideFooterHeight==0){
+            hideFooterHeight=footer.getHeight();
+//            Log.e(TAG, "onLayout: "+hideFooterHeight+"@"+hideHeaderHeight);
+        }
+        int top=hideHeaderHeight;
+//        header.layout(0,top,maxWidth,top+header.getMeasuredHeight());
+//        top+=header.getMeasuredHeight();
+//        mView.layout(0,top,maxWidth,top+mView.getMeasuredHeight());
+//        top+=mView.getMeasuredHeight();
+//        footer.layout(0,top,maxWidth,top+footer.getMeasuredHeight());
+        for (int i = 0; i < getChildCount(); i++) {
+            View childView = getChildAt(i);
+            if (childView.getVisibility() != GONE) {
+                childView.layout(0, top, maxWidth, top+childView.getMeasuredHeight());
+                top+=childView.getMeasuredHeight();
+            }
+        }
     }
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        if(!canRefresh){
-            return super.dispatchTouchEvent(event);
+        //每次首先进行判断
+        judgeIsTop();
+        judgeIsBottom();
+        if(canLoadMore){
+
         }
-        judgeIsTop();//每次首先进行判断
+        if(canAutoLoadMore){
+
+        }
+        if(canRefresh){
+         //不满一屏怎么处理
+        }
+
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 mLastY = event.getY();
@@ -278,11 +360,29 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
 //                    Log.e(TAG,deltaY+"=============Math.abs(deltaY) < touchSlop============="+touchSlop);
 //                    return false;
 //                }
-                boolean showTop=deltaY>0 && isTop;
-                boolean hideTop=deltaY<0 && getScrollY()<0;
-                boolean noMove=deltaY==0;//当不动的时候屏蔽一切事件，防止列表滚动
+                boolean showTop=deltaY>=0 && isTop;
+                boolean hideTop=deltaY<=0 && getScrollY()<0;
+//                boolean noMove=deltaY==0;//当不动的时候屏蔽一切事件，防止列表滚动
+                boolean showBottom=deltaY<=0 && isBottom;
+                boolean hideBottom=deltaY>=0 && getScrollY()>0;
+
 //                Log.e(TAG, "dispatchTouchEvent: "+ratio+"+++"+isTop+"###"+getScrollY()+"$$$"+deltaY);
-                if (showTop||hideTop||noMove) {
+                if(showBottom||hideBottom){
+                    if(deltaY<0){
+                        if(getScrollY()>=hideFooterHeight){
+                            ratio += 0.05f;
+                        }
+                    }else{
+                        ratio=DEFAULT_RATIO;
+                    }
+                    int dy=(int) (deltaY / ratio);
+                    if(deltaY>0 && Math.abs(dy)>Math.abs(getScrollY())){
+                        //当滑动距离大于可滚动距离时，进行调整
+                        dy=Math.abs(getScrollY());
+                    }
+                    scrollBy(0, -dy);
+                    return true;
+                }else if (showTop||hideTop) {
                     //说明头部显示，自己处理滑动，无论上滑下滑均同步移动（==0代表滑动到顶部可以继续下拉）
                     if (deltaY < 0) {//来回按住上下移动：下拉逐渐增加难度，上拉不变
                         ratio = DEFAULT_RATIO;//此处如果系数不是1，则会出现列表跳动的现象。。。暂未解决！！！
@@ -307,10 +407,6 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
                         }
                         // 时刻记得更新下拉头中的信息
                         updateHeaderView();
-                        // 当前正处于下拉或释放状态，要让ListView失去焦点，否则被点击的那一项会一直处于选中状态
-                        mView.setPressed(false);
-                        mView.setFocusable(false);
-                        mView.setFocusableInTouchMode(false);
                         lastStatus = currentStatus;
                     }
                     return true;
@@ -320,7 +416,9 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
 //                break;
             case MotionEvent.ACTION_UP:
             default:
-                ratio = DEFAULT_RATIO;//重置
+                //重置==============================================
+                ratio = DEFAULT_RATIO;
+                //处理顶部==========================================
                 if (currentStatus == STATUS_RELEASE_TO_REFRESH) {
                     // 松手时如果是释放立即刷新状态，就去调用正在刷新的任务
                     backToTop();
@@ -333,9 +431,47 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
                         backToTop();
                     }
                 }
+                //处理底部===========================================
+                if(getScrollY()>0 && getScrollY()<hideFooterHeight && !isLoading){
+                    //松手时隐藏底部
+                    hideFooter();
+                }else if(getScrollY()>=hideFooterHeight){
+                    //显示底部，开始加载更多
+                    showFooter();
+                }
                 break;
         }
         return super.dispatchTouchEvent(event);
+    }
+
+    private void hideFooter(){
+        currentFooterStatus=STATUS_LOAD_NORMAL;
+        isLoading=false;
+        mScroller.startScroll(0, getScrollY(), 0, -getScrollY());
+        invalidate();
+    }
+
+    private void showFooter(){
+        currentFooterStatus=STATUS_LOADING;
+        updateFooterView();
+        mScroller.startScroll(0, getScrollY(), 0, hideFooterHeight - getScrollY());
+        invalidate();
+        if (mListener != null && !isLoading) {
+            isLoading = true;
+            mListener.onLoadMore();
+        }
+    }
+
+    /**
+     * 当所有的加载逻辑完成后，记录调用一下，否则你的View将一直处于正在加载状态。
+     */
+    public void finishLoading(){
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                hideFooter();
+            }
+        });
     }
 
     private void backToTop() {
@@ -362,6 +498,27 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
         invalidate();
     }
 
+    /**
+     * 当所有的刷新逻辑完成后，记录调用一下，否则你的View将一直处于正在刷新状态。
+     */
+    public void finishRefreshing() {
+        isFinishingRefresh=true;
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                description.setText(getResources().getString(R.string.refresh_success));
+                ((View)arrow.getParent()).setVisibility(View.GONE);
+                updateAt.setVisibility(View.GONE);
+            }
+        });
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                hideHeader(true);
+            }
+        },1000);
+    }
+
     @Override
     public void computeScroll() {
         // TODO Auto-generated method stub
@@ -373,9 +530,57 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
             if(!isFinishingRefresh){
                 updateHeaderView();
             }
+            //加载动画完成后更新footer
+            updateFooterView();
         }
     }
-
+    /**
+     * 根据当前View的滚动状态来设定 {@link #isBottom}
+     * 的值，每次都需要在触摸事件中第一个执行，这样可以判断出当前应该是滚动View，还是应该进行上拉。
+     */
+    private void judgeIsBottom() {
+        if (mView instanceof AbsListView) {
+            AbsListView absListView = (AbsListView) mView;
+            //返回的是当前屏幕中的第最后一个子view，非整个列表
+            View lastChild = absListView.getChildAt(absListView.getLastVisiblePosition()-absListView.getFirstVisiblePosition());
+            if (lastChild != null) {
+                int lastVisiblePos = absListView.getLastVisiblePosition();//不必完全可见，当前屏幕中最后一个可见的子view在整个列表的位置
+                if (lastVisiblePos == absListView.getAdapter().getCount()-1 && lastChild.getBottom() == absListView.getMeasuredHeight()) {
+                    // 如果最后一个元素的下边缘，距离父布局值为view的高度，就说明View滚动到了最底部，此时应该允许上拉加载
+                    isBottom = true;
+                } else {
+                    isBottom = false;
+                }
+            } else {
+                // 如果View中没有元素，也应该允许下拉刷新，但不允许上拉
+                isBottom = false;
+            }
+        } else if (mView instanceof RecyclerView) {
+            RecyclerView recyclerView = (RecyclerView) mView;
+            View lastChild = recyclerView.getLayoutManager().findViewByPosition(recyclerView.getAdapter().getItemCount()-1);//lastChild不必须完全可见
+            View firstVisibleChild = recyclerView.getChildAt(0);//返回的是当前屏幕中的第一个子view，非整个列表
+//            if(lastChild!=null){
+//                Log.e("tianbin",lastChild.getBottom()+"==="+recyclerView.getChildAt(0).getTop()+"==="+recyclerView.getLayoutManager().getDecoratedBottom(lastChild));
+//            }else{
+//                Log.e("tianbin","+++++++++");
+//            }
+            if (firstVisibleChild != null) {
+//                Log.e(TAG, "judgeIsBottom: "+"@@@@@@@@@@@@@@"+"#"+ recyclerView.getMeasuredHeight());
+                if (lastChild != null &&
+                        recyclerView.getLayoutManager().getDecoratedBottom(lastChild) == recyclerView.getMeasuredHeight()) {
+//                    Log.e(TAG, "judgeIsBottom: "+"==================" );
+                    isBottom = true;
+                } else {
+                    isBottom = false;
+                }
+            } else {
+                //没有元素也允许刷新，but不允许上拉
+                isBottom = false;
+            }
+        } else {
+            isBottom = true;
+        }
+    }
     /**
      * 根据当前View的滚动状态来设定 {@link #isTop}
      * 的值，每次都需要在触摸事件中第一个执行，这样可以判断出当前应该是滚动View，还是应该进行下拉。
@@ -461,75 +666,16 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
     }
 
     /**
-     * 使当前线程睡眠指定的毫秒数。
-     *
-     * @param time 指定当前线程睡眠多久，以毫秒为单位
+     * 更新底部信息
      */
-    private void sleeping(int time) {
-        try {
-            Thread.sleep(time);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+    private void updateFooterView(){
+        if(currentFooterStatus==STATUS_LOAD_NORMAL){
+            tvLoadMore.setText(getResources().getString(R.string.load_more_normal));
+            pbFooter.setVisibility(View.GONE);
+        }else if(currentFooterStatus==STATUS_LOADING){
+            tvLoadMore.setText(getResources().getString(R.string.load_more_loading));
+            pbFooter.setVisibility(View.VISIBLE);
         }
-    }
-
-    /**
-     * 下拉刷新的监听器，使用下拉刷新的地方应该注册此监听器来获取刷新回调。
-     */
-    public interface PullToRefreshAndPushToLoadMoreListener {
-
-        /**
-         * 刷新时会去回调此方法，在方法内编写具体的刷新逻辑。注意此方法是在主线程中调用的， 需要另开线程来进行耗时操作。
-         */
-        void onRefresh();
-
-        /**
-         * 加载更多时会去回调此方法，在方法内编写具体的加载更多逻辑。注意此方法是在主线程中调用的， 需要另开线程来进行耗时操作。
-         */
-        void onLoadMore();
-
-    }
-
-    /**
-     * 给下拉刷新控件注册一个监听器。
-     *
-     * @param listener 监听器的实现。
-     * @param id       为了防止不同界面的下拉刷新在上次更新时间上互相有冲突， 请不同界面在注册下拉刷新监听器时一定要传入不同的id。
-     *                 如果不用时间则可以不传递此参数
-     */
-    public void setOnRefreshAndLoadMoreListener(PullToRefreshAndPushToLoadMoreListener listener, int id) {
-        mListener = listener;
-        mId = id;
-    }
-
-    /**
-     * 给下拉刷新控件注册一个监听器。
-     *
-     * @param listener 监听器的实现。
-     */
-    public void setOnRefreshAndLoadMoreListener(PullToRefreshAndPushToLoadMoreListener listener) {
-        setOnRefreshAndLoadMoreListener(listener, mId);
-    }
-
-    /**
-     * 当所有的刷新逻辑完成后，记录调用一下，否则你的View将一直处于正在刷新状态。
-     */
-    public void finishRefreshing() {
-        isFinishingRefresh=true;
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                description.setText(getResources().getString(R.string.refresh_success));
-                ((View)arrow.getParent()).setVisibility(View.GONE);
-                updateAt.setVisibility(View.GONE);
-            }
-        });
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                hideHeader(true);
-            }
-        },1000);
     }
 
     /**
@@ -599,5 +745,43 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
 
     public void setCanRefresh(boolean canRefresh) {
         this.canRefresh = canRefresh;
+    }
+
+    /**
+     * 下拉刷新的监听器，使用下拉刷新的地方应该注册此监听器来获取刷新回调。
+     */
+    public interface PullToRefreshAndPushToLoadMoreListener {
+
+        /**
+         * 刷新时会去回调此方法，在方法内编写具体的刷新逻辑。注意此方法是在主线程中调用的， 需要另开线程来进行耗时操作。
+         */
+        void onRefresh();
+
+        /**
+         * 加载更多时会去回调此方法，在方法内编写具体的加载更多逻辑。注意此方法是在主线程中调用的， 需要另开线程来进行耗时操作。
+         */
+        void onLoadMore();
+
+    }
+
+    /**
+     * 给下拉刷新控件注册一个监听器。
+     *
+     * @param listener 监听器的实现。
+     * @param id       为了防止不同界面的下拉刷新在上次更新时间上互相有冲突， 请不同界面在注册下拉刷新监听器时一定要传入不同的id。
+     *                 如果不用时间则可以不传递此参数
+     */
+    public void setOnRefreshAndLoadMoreListener(PullToRefreshAndPushToLoadMoreListener listener, int id) {
+        mListener = listener;
+        mId = id;
+    }
+
+    /**
+     * 给下拉刷新控件注册一个监听器。
+     *
+     * @param listener 监听器的实现。
+     */
+    public void setOnRefreshAndLoadMoreListener(PullToRefreshAndPushToLoadMoreListener listener) {
+        setOnRefreshAndLoadMoreListener(listener, mId);
     }
 }

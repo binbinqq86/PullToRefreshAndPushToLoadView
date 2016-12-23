@@ -35,7 +35,7 @@ public class RecyclerViewActivity extends AppCompatActivity {
         LinearLayoutManager layoutManager=new GridLayoutManager(this,2);
 //        LinearLayoutManager layoutManager=new LinearLayoutManager(this);
         recyclerView.setLayoutManager(layoutManager);
-        recyclerView.addItemDecoration(new DividerItemDecoration(this,layoutManager.getOrientation()));
+        recyclerView.addItemDecoration(new DividerItemDecoration(this,layoutManager.getOrientation(),false));
         recyclerView.setItemAnimator(new DefaultItemAnimator());
         pullToRefreshAndPushToLoadView.setOnRefreshListener(new PullToRefreshAndPushToLoadView3.PullToRefreshListener() {
             @Override

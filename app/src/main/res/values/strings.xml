@@ -8,4 +8,7 @@
     <string name="updated_just_now">刚刚更新</string>
     <string name="time_error">时间有问题</string>
     <string name="refresh_success">刷新成功</string>
+
+    <string name="load_more_normal">查看更多</string>
+    <string name="load_more_loading">加载中&#8230;</string>
 </resources>

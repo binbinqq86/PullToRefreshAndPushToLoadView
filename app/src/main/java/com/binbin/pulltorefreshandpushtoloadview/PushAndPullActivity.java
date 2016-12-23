@@ -10,10 +10,12 @@ import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.GridView;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView5;
 
@@ -29,9 +31,9 @@ public class PushAndPullActivity extends AppCompatActivity {
         pullToRefreshAndPushToLoadView = new PullToRefreshAndPushToLoadView5(this);
         setContentView(pullToRefreshAndPushToLoadView);
 
-        list();
+//        list();
 //        grid();
-//        recycler();
+        recycler();
         
         pullToRefreshAndPushToLoadView.setOnRefreshAndLoadMoreListener(new PullToRefreshAndPushToLoadView5.PullToRefreshAndPushToLoadMoreListener() {
             @Override
@@ -41,19 +43,35 @@ public class PushAndPullActivity extends AppCompatActivity {
 
             @Override
             public void onLoadMore() {
-
+                load();
             }
         }, 0);
     }
 
     private void list(){
+//        items=new String[]{};
         ListView listView = new ListView(this);
+        listView.setLayoutParams(new ViewGroup.LayoutParams(-1,-1));
         pullToRefreshAndPushToLoadView.addView(listView);
         listView.setAdapter(new ArrayAdapter<String>(this, R.layout.item, items));
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                Toast.makeText(PushAndPullActivity.this,"===setOnItemClickListener======"+position,Toast.LENGTH_SHORT).show();
+            }
+        });
+        listView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
+            @Override
+            public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
+                Toast.makeText(PushAndPullActivity.this,"===setOnItemLongClickListener======"+position,Toast.LENGTH_SHORT).show();
+                return false;
+            }
+        });
     }
 
     private void grid(){
         GridView gridView = new GridView(this);
+        gridView.setLayoutParams(new ViewGroup.LayoutParams(-1,-1));
         gridView.setNumColumns(3);
         pullToRefreshAndPushToLoadView.addView(gridView);
         gridView.setAdapter(new ArrayAdapter<String>(this, R.layout.item, items));
@@ -61,14 +79,16 @@ public class PushAndPullActivity extends AppCompatActivity {
 
     private void recycler(){
         RecyclerView recyclerView = new RecyclerView(this);
+        recyclerView.setLayoutParams(new ViewGroup.LayoutParams(-1,-1));
 //        items=new String[]{};
         recyclerView.setAdapter(new MyAdapter(items,this));
         recyclerView.setHasFixedSize(true);
         LinearLayoutManager layoutManager=new GridLayoutManager(this,2);
 //        LinearLayoutManager layoutManager=new LinearLayoutManager(this);
         recyclerView.setLayoutManager(layoutManager);
-        recyclerView.addItemDecoration(new DividerItemDecoration(this,layoutManager.getOrientation()));
+        recyclerView.addItemDecoration(new DividerItemDecoration(this,layoutManager.getOrientation(),false));
         recyclerView.setItemAnimator(new DefaultItemAnimator());
+        pullToRefreshAndPushToLoadView.addView(recyclerView);
     }
 
     private void refresh() {
@@ -82,6 +102,21 @@ public class PushAndPullActivity extends AppCompatActivity {
                     e.printStackTrace();
                 }
                 pullToRefreshAndPushToLoadView.finishRefreshing();
+            }
+        }.start();
+    }
+
+    private void load() {
+        new Thread() {
+            @Override
+            public void run() {
+                super.run();
+                try {
+                    Thread.sleep(20 * 1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                pullToRefreshAndPushToLoadView.finishLoading();
             }
         }.start();
     }

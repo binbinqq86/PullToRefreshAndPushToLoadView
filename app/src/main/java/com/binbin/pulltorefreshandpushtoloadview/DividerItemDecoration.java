@@ -23,6 +23,7 @@ import android.support.annotation.DrawableRes;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.View;
 
 
@@ -45,11 +46,17 @@ public class DividerItemDecoration extends RecyclerView.ItemDecoration {
 
     private int mOrientation;
 
-    public DividerItemDecoration(Context context, int orientation) {
+    /**
+     * 设置是否显示头部跟底部分割线
+     */
+    private boolean drawTopAndBottomLine=false;
+
+    public DividerItemDecoration(Context context, int orientation,boolean drawTopAndBottomLine) {
         final TypedArray a = context.obtainStyledAttributes(ATTRS);
         mDivider = a.getDrawable(0);
         a.recycle();
         setOrientation(orientation);
+        this.drawTopAndBottomLine=drawTopAndBottomLine;
     }
     /**
      * 自定义分割线
@@ -57,10 +64,12 @@ public class DividerItemDecoration extends RecyclerView.ItemDecoration {
      * @param orientation 列表方向
      * @param drawableId  分割线图片
      */
-    public DividerItemDecoration(Context context, int orientation, @DrawableRes int drawableId) {
+    public DividerItemDecoration(Context context, int orientation, @DrawableRes int drawableId,boolean drawTopAndBottomLine) {
         setOrientation(orientation);
         mDivider = ContextCompat.getDrawable(context, drawableId);
+        this.drawTopAndBottomLine=drawTopAndBottomLine;
     }
+
     public void setOrientation(int orientation) {
         if (orientation != HORIZONTAL_LIST && orientation != VERTICAL_LIST) {
             throw new IllegalArgumentException("invalid orientation");
@@ -87,11 +96,25 @@ public class DividerItemDecoration extends RecyclerView.ItemDecoration {
         final int childCount = parent.getChildCount();
         for (int i = 0; i < childCount; i++) {
             final View child = parent.getChildAt(i);
-            android.support.v7.widget.RecyclerView v = new android.support.v7.widget.RecyclerView(parent.getContext());
             final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams) child
                     .getLayoutParams();
-            final int top = child.getBottom() + params.bottomMargin;
-            final int bottom = top + mDivider.getIntrinsicHeight();
+            int top=0,bottom=0;
+            if(drawTopAndBottomLine){
+                //加上第一条
+                if(i==0){
+                    top=child.getTop()-params.topMargin;
+                    bottom = top + mDivider.getIntrinsicHeight();
+                    mDivider.setBounds(left, top, right, bottom);
+                    mDivider.draw(c);
+                }
+            }else{
+                if(i==childCount-1){
+                    return;//最后一条不画
+                }
+            }
+            Log.e("tianbin",i+ "drawVertical: "+childCount );
+            top = child.getBottom() + params.bottomMargin;
+            bottom = top + mDivider.getIntrinsicHeight();
             mDivider.setBounds(left, top, right, bottom);
             mDivider.draw(c);
         }
