@@ -1,6 +1,5 @@
 package com.binbin.pulltorefreshandpushtoloadview.view;
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
@@ -10,7 +9,6 @@ import android.preference.PreferenceManager;
 import android.support.annotation.RequiresApi;
 import android.support.v7.widget.RecyclerView;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -20,7 +18,6 @@ import android.view.animation.RotateAnimation;
 import android.widget.AbsListView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.Scroller;
 import android.widget.TextView;
@@ -30,10 +27,10 @@ import com.binbin.pulltorefreshandpushtoloadview.R;
 /**
  * Created by -- on 2016/11/2.
  * 自定义下拉刷新上拉加载的基类，可以扩展多种可滑动view(ListView,GridView,RecyclerView...)
- * 第三版：采用Scroller实现下拉效果，支持ListView,GridView,RecyclerView，同时修复一些UI上滑动的bug
+ * 第五版：第三版的基础上进行改进，增加上拉加载更多。。。
  */
 
-public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
+public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
     private static final String TAG = "tianbin";
     private Context mContext;
     private Scroller mScroller;
@@ -168,9 +165,9 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
      */
     public static final int STATUS_REFRESH_FINISHED = 3;
     /**
-     * 下拉刷新的回调接口
+     * 下拉刷新上拉加载的回调接口
      */
-    private PullToRefreshListener mListener;
+    private PullToRefreshAndPushToLoadMoreListener mListener;
 
     /**
      * 是否正在刷新
@@ -192,24 +189,28 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
      * 是否支持下拉刷新
      */
     private boolean canRefresh=true;
+    /**
+     * 是否支持上拉加载
+     */
+    private boolean canLoadMore=true;
 
     private Handler handler = new Handler(Looper.getMainLooper());
 
-    public PullToRefreshAndPushToLoadView3(Context context) {
+    public PullToRefreshAndPushToLoadView5(Context context) {
         this(context, null);
     }
 
-    public PullToRefreshAndPushToLoadView3(Context context, AttributeSet attrs) {
+    public PullToRefreshAndPushToLoadView5(Context context, AttributeSet attrs) {
         this(context, attrs, 0);
     }
 
-    public PullToRefreshAndPushToLoadView3(Context context, AttributeSet attrs, int defStyleAttr) {
+    public PullToRefreshAndPushToLoadView5(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         init(context);
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public PullToRefreshAndPushToLoadView3(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+    public PullToRefreshAndPushToLoadView5(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
         init(context);
     }
@@ -475,12 +476,17 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
     /**
      * 下拉刷新的监听器，使用下拉刷新的地方应该注册此监听器来获取刷新回调。
      */
-    public interface PullToRefreshListener {
+    public interface PullToRefreshAndPushToLoadMoreListener {
 
         /**
-         * 刷新时会去回调此方法，在方法内编写具体的刷新逻辑。注意此方法是在子线程中调用的， 你可以不必另开线程来进行耗时操作。
+         * 刷新时会去回调此方法，在方法内编写具体的刷新逻辑。注意此方法是在主线程中调用的， 需要另开线程来进行耗时操作。
          */
         void onRefresh();
+
+        /**
+         * 加载更多时会去回调此方法，在方法内编写具体的加载更多逻辑。注意此方法是在主线程中调用的， 需要另开线程来进行耗时操作。
+         */
+        void onLoadMore();
 
     }
 
@@ -491,7 +497,7 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
      * @param id       为了防止不同界面的下拉刷新在上次更新时间上互相有冲突， 请不同界面在注册下拉刷新监听器时一定要传入不同的id。
      *                 如果不用时间则可以不传递此参数
      */
-    public void setOnRefreshListener(PullToRefreshListener listener, int id) {
+    public void setOnRefreshAndLoadMoreListener(PullToRefreshAndPushToLoadMoreListener listener, int id) {
         mListener = listener;
         mId = id;
     }
@@ -501,8 +507,8 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
      *
      * @param listener 监听器的实现。
      */
-    public void setOnRefreshListener(PullToRefreshListener listener) {
-        setOnRefreshListener(listener, mId);
+    public void setOnRefreshAndLoadMoreListener(PullToRefreshAndPushToLoadMoreListener listener) {
+        setOnRefreshAndLoadMoreListener(listener, mId);
     }
 
     /**
@@ -577,6 +583,14 @@ public class PullToRefreshAndPushToLoadView3 extends LinearLayout {
         animation.setDuration(300);
         animation.setFillAfter(true);
         arrow.startAnimation(animation);
+    }
+
+    public boolean isCanLoadMore() {
+        return canLoadMore;
+    }
+
+    public void setCanLoadMore(boolean canLoadMore) {
+        this.canLoadMore = canLoadMore;
     }
 
     public boolean isCanRefresh() {

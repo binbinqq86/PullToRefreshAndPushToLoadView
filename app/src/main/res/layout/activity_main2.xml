@@ -3,35 +3,43 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     android:paddingBottom="@dimen/activity_vertical_margin"
     android:paddingLeft="@dimen/activity_horizontal_margin"
     android:paddingRight="@dimen/activity_horizontal_margin"
-    android:paddingTop="@dimen/activity_vertical_margin"
-    android:orientation="vertical">
+    android:paddingTop="@dimen/activity_vertical_margin">
 
     <Button
+        android:id="@+id/btlv"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:text="ListView"
-        android:textAllCaps="false"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:id="@+id/btlv" />
+        android:textAllCaps="false" />
 
     <Button
-        android:text="GridView"
+        android:id="@+id/btgv"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:id="@+id/btgv" />
+        android:text="GridView" />
 
     <Button
+        android:id="@+id/btrv"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:text="RecyclerView"
-        android:textAllCaps="false"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:id="@+id/btrv" />
+        android:textAllCaps="false" />
+
     <Button
-        android:text="RecyclerView2"
-        android:textAllCaps="false"
+        android:id="@+id/btrv2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:id="@+id/btrv2" />
+        android:text="RecyclerView2"
+        android:textAllCaps="false" />
+
+    <Button
+        android:id="@+id/btall"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="上拉和下拉同时支持"
+        android:textAllCaps="false" />
 </LinearLayout>
