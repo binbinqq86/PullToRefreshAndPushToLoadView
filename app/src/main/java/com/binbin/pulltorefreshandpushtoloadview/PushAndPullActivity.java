@@ -13,6 +13,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.GridView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -29,6 +30,9 @@ public class PushAndPullActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         pullToRefreshAndPushToLoadView = new PullToRefreshAndPushToLoadView5(this);
+        LinearLayout.LayoutParams ll=new LinearLayout.LayoutParams(-1,-1);
+        pullToRefreshAndPushToLoadView.setPadding(50,50,50,50);
+        pullToRefreshAndPushToLoadView.setLayoutParams(ll);
         setContentView(pullToRefreshAndPushToLoadView);
 
 //        list();
@@ -83,10 +87,11 @@ public class PushAndPullActivity extends AppCompatActivity {
 //        items=new String[]{};
         recyclerView.setAdapter(new MyAdapter(items,this));
         recyclerView.setHasFixedSize(true);
-        LinearLayoutManager layoutManager=new GridLayoutManager(this,2);
-//        LinearLayoutManager layoutManager=new LinearLayoutManager(this);
+//        GridLayoutManager layoutManager=new GridLayoutManager(this,2);
+        LinearLayoutManager layoutManager=new LinearLayoutManager(this);
         recyclerView.setLayoutManager(layoutManager);
-        recyclerView.addItemDecoration(new DividerItemDecoration(this,layoutManager.getOrientation(),false));
+        DividerItemDecoration dividerItemDecoration=new DividerItemDecoration(this,1,false);
+        recyclerView.addItemDecoration(dividerItemDecoration);
         recyclerView.setItemAnimator(new DefaultItemAnimator());
         pullToRefreshAndPushToLoadView.addView(recyclerView);
     }
