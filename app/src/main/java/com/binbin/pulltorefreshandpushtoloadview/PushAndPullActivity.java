@@ -1,6 +1,7 @@
 package com.binbin.pulltorefreshandpushtoloadview;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.DefaultItemAnimator;
@@ -29,16 +30,13 @@ public class PushAndPullActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        pullToRefreshAndPushToLoadView = new PullToRefreshAndPushToLoadView5(this);
-        LinearLayout.LayoutParams ll=new LinearLayout.LayoutParams(-1,-1);
-        pullToRefreshAndPushToLoadView.setPadding(50,50,50,50);
-        pullToRefreshAndPushToLoadView.setLayoutParams(ll);
-        setContentView(pullToRefreshAndPushToLoadView);
+        setContentView(R.layout.recycler_list_activity_main);
+        pullToRefreshAndPushToLoadView = (PullToRefreshAndPushToLoadView5) findViewById(R.id.prpt);
 
 //        list();
 //        grid();
         recycler();
-        
+
         pullToRefreshAndPushToLoadView.setOnRefreshAndLoadMoreListener(new PullToRefreshAndPushToLoadView5.PullToRefreshAndPushToLoadMoreListener() {
             @Override
             public void onRefresh() {
@@ -81,19 +79,19 @@ public class PushAndPullActivity extends AppCompatActivity {
         gridView.setAdapter(new ArrayAdapter<String>(this, R.layout.item, items));
     }
 
-    private void recycler(){
-        RecyclerView recyclerView = new RecyclerView(this);
-        recyclerView.setLayoutParams(new ViewGroup.LayoutParams(-1,-1));
+    private View recycler(){
+        RecyclerView recyclerView = (RecyclerView) findViewById(R.id.rv);
 //        items=new String[]{};
         recyclerView.setAdapter(new MyAdapter(items,this));
         recyclerView.setHasFixedSize(true);
 //        GridLayoutManager layoutManager=new GridLayoutManager(this,2);
         LinearLayoutManager layoutManager=new LinearLayoutManager(this);
         recyclerView.setLayoutManager(layoutManager);
-        DividerItemDecoration dividerItemDecoration=new DividerItemDecoration(this,1,false);
+        DividerItemDecoration dividerItemDecoration=new DividerItemDecoration(this, Color.DKGRAY,2,2);
+        dividerItemDecoration.setDrawBorderTopAndBottom(true);
         recyclerView.addItemDecoration(dividerItemDecoration);
         recyclerView.setItemAnimator(new DefaultItemAnimator());
-        pullToRefreshAndPushToLoadView.addView(recyclerView);
+        return recyclerView;
     }
 
     private void refresh() {

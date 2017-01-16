@@ -4,4 +4,6 @@
     android:gravity="center"
     android:textSize="15sp"
     android:id="@+id/tv"
+    android:clickable="true"
+    android:background="@drawable/default_ripple_white_bg"
     android:layout_height="60dip"/>

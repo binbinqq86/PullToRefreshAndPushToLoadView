@@ -2,11 +2,13 @@ package com.binbin.pulltorefreshandpushtoloadview.view;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Canvas;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.support.annotation.RequiresApi;
+import android.support.v7.widget.LinearLayoutCompat;
 import android.support.v7.widget.RecyclerView;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -41,10 +43,6 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
     private int touchSlop;
 
     /**
-     * 是否已加载过一次layout，这里onLayout中的初始化只需加载一次
-     */
-    private boolean loadOnce;
-    /**
      * 下拉头的高度
      */
     private int hideHeaderHeight;
@@ -70,7 +68,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
     /**
      * 需要去刷新和加载的View
      */
-    private ViewGroup mView;
+    private View mView;
     /**
      * 本控件的宽高
      */
@@ -240,6 +238,8 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
      */
     private boolean canAutoLoadMore=false;
 
+    private boolean hasFinishedLayout=false;
+
     private Handler handler = new Handler(Looper.getMainLooper());
 
     public PullToRefreshAndPushToLoadView5(Context context) {
@@ -266,13 +266,13 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
         mScroller = new Scroller(mContext);
         screenHeight = getResources().getDisplayMetrics().heightPixels;
         preferences = PreferenceManager.getDefaultSharedPreferences(mContext);
-        header = LayoutInflater.from(mContext).inflate(R.layout.refresh_header, null, true);
+        header = LayoutInflater.from(mContext).inflate(R.layout.refresh_header, null, false);
         progressBar = (ProgressBar) header.findViewById(R.id.progress_bar);
         arrow = (ImageView) header.findViewById(R.id.arrow);
         description = (TextView) header.findViewById(R.id.description);
         updateAt = (TextView) header.findViewById(R.id.updated_at);
 
-        footer = LayoutInflater.from(mContext).inflate(R.layout.loadmore_footer, null, true);
+        footer = LayoutInflater.from(mContext).inflate(R.layout.loadmore_footer, null, false);
         pbFooter = (ProgressBar) footer.findViewById(R.id.pb);
         tvLoadMore = (TextView) footer.findViewById(R.id.tv_load_more);
 
@@ -286,7 +286,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
-        for (int i = 0,count = getChildCount(); i < count; i++) {
+        for (int i = 0; i < getChildCount(); i++) {
             View childView = getChildAt(i);
             if(childView.getVisibility()!=View.GONE){
                 //获取每个子view的自己高度宽度，取最大的就是viewGroup的大小
@@ -305,13 +305,15 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         super.onLayout(changed, l, t, r, b);
-        if (changed && !loadOnce) {
+        if(!hasFinishedLayout){
+            mView=getChildAt(1);
+            if(mView!=null){
+                addView(footer);
+            }
+            hasFinishedLayout=true;
+        }
+        if(hideHeaderHeight==0){
             hideHeaderHeight = -header.getHeight();
-//            Log.e(TAG, "onLayout: "+hideFooterHeight+"#"+hideHeaderHeight);
-            mView = (ViewGroup) getChildAt(1);//当找到mView以后，再去加上footer
-            addView(footer,-1);
-            loadOnce = true;
-            return;
         }
         if(hideFooterHeight==0){
             hideFooterHeight=footer.getHeight();
@@ -611,7 +613,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
 //                Log.e("tianbin","+++++++++");
 //            }
             if (firstVisibleChild != null) {
-                if (firstChild != null && firstChild.getTop() == 0) {
+                if (firstChild != null && recyclerView.getLayoutManager().getDecoratedTop(firstChild) == 0) {
                     isTop = true;
                 } else {
                     isTop = false;
@@ -784,4 +786,5 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
     public void setOnRefreshAndLoadMoreListener(PullToRefreshAndPushToLoadMoreListener listener) {
         setOnRefreshAndLoadMoreListener(listener, mId);
     }
+
 }
