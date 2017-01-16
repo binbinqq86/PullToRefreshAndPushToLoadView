@@ -3,6 +3,7 @@ package com.binbin.pulltorefreshandpushtoloadview;
 import android.content.Context;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.GridLayoutManager;
@@ -32,10 +33,19 @@ public class PushAndPullActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.recycler_list_activity_main);
         pullToRefreshAndPushToLoadView = (PullToRefreshAndPushToLoadView5) findViewById(R.id.prpt);
+//        pullToRefreshAndPushToLoadView.setCanRefresh(false);
+//        pullToRefreshAndPushToLoadView.setCanLoadMore(false);
+        pullToRefreshAndPushToLoadView.setCanAutoLoadMore(true);
+//        new Handler().postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                pullToRefreshAndPushToLoadView.autoRefresh();
+//            }
+//        },2000);
 
-//        list();
 //        grid();
-        recycler();
+        list();
+//        recycler();
 
         pullToRefreshAndPushToLoadView.setOnRefreshAndLoadMoreListener(new PullToRefreshAndPushToLoadView5.PullToRefreshAndPushToLoadMoreListener() {
             @Override
@@ -115,7 +125,7 @@ public class PushAndPullActivity extends AppCompatActivity {
             public void run() {
                 super.run();
                 try {
-                    Thread.sleep(20 * 1000);
+                    Thread.sleep(2 * 1000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }

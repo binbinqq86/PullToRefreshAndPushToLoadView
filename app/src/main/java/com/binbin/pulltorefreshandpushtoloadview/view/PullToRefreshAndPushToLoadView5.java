@@ -27,10 +27,13 @@ import android.widget.TextView;
 
 import com.binbin.pulltorefreshandpushtoloadview.R;
 
+import java.security.NoSuchAlgorithmException;
+
 /**
  * Created by -- on 2016/11/2.
  * 自定义下拉刷新上拉加载的基类，可以扩展多种可滑动view(ListView,GridView,RecyclerView...)
  * 第五版：第三版的基础上进行改进，增加上拉加载更多。。。
+ * 遗留问题：布局加入padding margin出现问题，不满一屏的处理，允许刷新加载的控制，item点击问题
  */
 
 public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
@@ -213,6 +216,10 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
      */
     private boolean isRefreshing;
     /**
+     * 是否正在自动刷新
+     */
+    private boolean autoRefresh;
+    /**
      * 是否正在完成刷新
      */
     private boolean isFinishingRefresh=false;
@@ -238,7 +245,15 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
      */
     private boolean canAutoLoadMore=false;
 
+    /**
+     * 是否已经完成header,mView,footer的布局
+     */
     private boolean hasFinishedLayout=false;
+
+    /**
+     * 是否正在触摸
+     */
+    private boolean isTouching=false;
 
     private Handler handler = new Handler(Looper.getMainLooper());
 
@@ -266,6 +281,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
         mScroller = new Scroller(mContext);
         screenHeight = getResources().getDisplayMetrics().heightPixels;
         preferences = PreferenceManager.getDefaultSharedPreferences(mContext);
+
         header = LayoutInflater.from(mContext).inflate(R.layout.refresh_header, null, false);
         progressBar = (ProgressBar) header.findViewById(R.id.progress_bar);
         arrow = (ImageView) header.findViewById(R.id.arrow);
@@ -297,6 +313,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
         }
         //为ViewGroup设置宽高
         setMeasuredDimension(maxWidth, maxHeight);
+        Log.e(TAG, "onMeasure: " );
     }
 
     /**
@@ -305,12 +322,15 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         super.onLayout(changed, l, t, r, b);
+        Log.e(TAG, "onLayout: " );
         if(!hasFinishedLayout){
             mView=getChildAt(1);
-            if(mView!=null){
-                addView(footer);
-            }
+            addView(footer);
             hasFinishedLayout=true;
+
+            if(canLoadMore&&canAutoLoadMore){
+                setAutoLoadMore();
+            }
         }
         if(hideHeaderHeight==0){
             hideHeaderHeight = -header.getHeight();
@@ -336,23 +356,14 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        //每次首先进行判断
+        //每次首先进行判断是否在列表顶部或者底部
         judgeIsTop();
         judgeIsBottom();
-        if(canLoadMore){
-
-        }
-        if(canAutoLoadMore){
-
-        }
-        if(canRefresh){
-         //不满一屏怎么处理
-        }
-
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 mLastY = event.getY();
                 mFirstY = event.getY();
+                isTouching=true;
                 break;
             case MotionEvent.ACTION_MOVE:
 //                float totalDistance = event.getY() - mFirstY;
@@ -369,7 +380,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
                 boolean hideBottom=deltaY>=0 && getScrollY()>0;
 
 //                Log.e(TAG, "dispatchTouchEvent: "+ratio+"+++"+isTop+"###"+getScrollY()+"$$$"+deltaY);
-                if(showBottom||hideBottom){
+                if((showBottom&&canLoadMore)||hideBottom){
                     if(deltaY<0){
                         if(getScrollY()>=hideFooterHeight){
                             ratio += 0.05f;
@@ -384,7 +395,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
                     }
                     scrollBy(0, -dy);
                     return true;
-                }else if (showTop||hideTop) {
+                }else if ((showTop&&canRefresh)||hideTop) {
                     //说明头部显示，自己处理滑动，无论上滑下滑均同步移动（==0代表滑动到顶部可以继续下拉）
                     if (deltaY < 0) {//来回按住上下移动：下拉逐渐增加难度，上拉不变
                         ratio = DEFAULT_RATIO;//此处如果系数不是1，则会出现列表跳动的现象。。。暂未解决！！！
@@ -416,10 +427,10 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
                     return super.dispatchTouchEvent(event);
                 }
 //                break;
-            case MotionEvent.ACTION_UP:
             default:
                 //重置==============================================
                 ratio = DEFAULT_RATIO;
+                isTouching=false;
                 //处理顶部==========================================
                 if (currentStatus == STATUS_RELEASE_TO_REFRESH) {
                     // 松手时如果是释放立即刷新状态，就去调用正在刷新的任务
@@ -464,6 +475,17 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
         }
     }
 
+    private void autoLoadMore(){
+        if (mListener != null && !isLoading) {
+            currentFooterStatus=STATUS_LOADING;
+            updateFooterView();
+            mScroller.startScroll(0, 0, 0, hideFooterHeight);
+            invalidate();
+            isLoading = true;
+            mListener.onLoadMore();
+        }
+    }
+
     /**
      * 当所有的加载逻辑完成后，记录调用一下，否则你的View将一直处于正在加载状态。
      */
@@ -490,6 +512,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
     private void hideHeader(boolean isRefreshFinished) {
         currentStatus = STATUS_REFRESH_FINISHED;
         lastStatus=currentStatus;
+        autoRefresh=false;
         isRefreshing = false;
         isFinishingRefresh=false;
         if(isRefreshFinished){
@@ -498,6 +521,21 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
         }
         mScroller.startScroll(0, getScrollY(), 0, -getScrollY());
         invalidate();
+    }
+
+    /**
+     * 自动刷新
+     */
+    public void autoRefresh(){
+        if (mListener != null && !isRefreshing) {
+            currentStatus = STATUS_REFRESHING;
+            updateHeaderView();
+            mScroller.startScroll(0, 0, 0, hideHeaderHeight);
+            invalidate();
+            isRefreshing = true;
+            autoRefresh=true;//放在updateHeaderView后面
+            mListener.onRefresh();
+        }
     }
 
     /**
@@ -536,6 +574,61 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
             updateFooterView();
         }
     }
+
+    /**
+     * 根据是否滚动到最底部去进行自动加载更多的操作
+     */
+    private void setAutoLoadMore(){
+        if(mView!=null){
+            if(mView instanceof AbsListView){
+                AbsListView absListView= (AbsListView) mView;
+                absListView.setOnScrollListener(new AbsListView.OnScrollListener() {
+                    @Override
+                    public void onScrollStateChanged(AbsListView view, int scrollState) {
+                    }
+
+                    @Override
+                    public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+                        //此处有两种选择：1、绝对的滚动到最底部。2、滚动到最后一个元素就开始去加载，不必显示footer
+                        Log.e(TAG, "onScroll: 111111111111111111" );
+                        if(isTouching){
+                            return;
+                        }
+                        judgeIsBottom();
+                        if(isBottom){
+                            autoLoadMore();
+                        }
+//                        if(view.getLastVisiblePosition()==totalItemCount-1){
+//                            autoLoadMore();
+//                        }
+                    }
+                });
+            }else if(mView instanceof RecyclerView){
+                RecyclerView recyclerView= (RecyclerView) mView;
+                recyclerView.setOnScrollListener(new RecyclerView.OnScrollListener() {
+
+                    @Override
+                    public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
+                        super.onScrolled(recyclerView, dx, dy);
+                        if(isTouching){
+                            return;
+                        }
+                        judgeIsBottom();
+//                        View lastChild = recyclerView.getLayoutManager().findViewByPosition(recyclerView.getAdapter().getItemCount()-1);
+                        if(isBottom){
+                            //绝对的底部
+                            autoLoadMore();
+                        }
+//                        else if(lastChild!=null){
+//                            //最后一个元素可见，但不一定完全可见
+//                            autoLoadMore();
+//                        }
+                    }
+                });
+            }
+        }
+    }
+
     /**
      * 根据当前View的滚动状态来设定 {@link #isBottom}
      * 的值，每次都需要在触摸事件中第一个执行，这样可以判断出当前应该是滚动View，还是应该进行上拉。
@@ -708,6 +801,12 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
             arrow.clearAnimation();
             arrow.setVisibility(View.VISIBLE);
             progressBar.setVisibility(View.GONE);
+        }else if(autoRefresh){
+            //自动刷新单独处理
+            description.setText(getResources().getString(R.string.refreshing));
+            progressBar.setVisibility(View.VISIBLE);
+            arrow.clearAnimation();
+            arrow.setVisibility(View.GONE);
         }
         refreshUpdatedAtValue();
     }
@@ -747,6 +846,14 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
 
     public void setCanRefresh(boolean canRefresh) {
         this.canRefresh = canRefresh;
+    }
+
+    public boolean isCanAutoLoadMore() {
+        return canAutoLoadMore;
+    }
+
+    public void setCanAutoLoadMore(boolean canAutoLoadMore) {
+        this.canAutoLoadMore = canAutoLoadMore;
     }
 
     /**
