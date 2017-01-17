@@ -12,6 +12,8 @@ import android.support.v7.widget.LinearLayoutCompat;
 import android.support.v7.widget.RecyclerView;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -33,7 +35,7 @@ import java.security.NoSuchAlgorithmException;
  * Created by -- on 2016/11/2.
  * 自定义下拉刷新上拉加载的基类，可以扩展多种可滑动view(ListView,GridView,RecyclerView...)
  * 第五版：第三版的基础上进行改进，增加上拉加载更多。。。
- * 遗留问题：布局加入padding margin出现问题，不满一屏的处理，允许刷新加载的控制，item点击问题
+ * 遗留问题：布局加入padding margin出现问题，不满一屏的处理，item点击问题
  */
 
 public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
@@ -292,9 +294,26 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
         description = (TextView) header.findViewById(R.id.description);
         updateAt = (TextView) header.findViewById(R.id.updated_at);
 
-        footer = LayoutInflater.from(mContext).inflate(R.layout.loadmore_footer, null, false);
-        pbFooter = (ProgressBar) footer.findViewById(R.id.pb);
-        tvLoadMore = (TextView) footer.findViewById(R.id.tv_load_more);
+//        footer = LayoutInflater.from(mContext).inflate(R.layout.loadmore_footer, null, false);
+//        pbFooter = (ProgressBar) footer.findViewById(R.id.pb);
+//        tvLoadMore = (TextView) footer.findViewById(R.id.tv_load_more);
+
+        LinearLayout ll=new LinearLayout(mContext);
+//        LinearLayout.LayoutParams llp=new LinearLayout.LayoutParams(-2,-2);
+//        llp.gravity= Gravity.CENTER;
+//        llp.height=dp2px(60);
+        pbFooter=new ProgressBar(mContext);
+//        llp.rightMargin= dp2px(16);
+//        pbFooter.setLayoutParams(llp);
+        tvLoadMore=new TextView(mContext);
+        tvLoadMore.setText(getResources().getString(R.string.load_more_normal));
+//        tvLoadMore.setTextSize(TypedValue.COMPLEX_UNIT_SP,15);
+//        tvLoadMore.setGravity(Gravity.CENTER);
+//        llp.rightMargin=0;
+//        tvLoadMore.setLayoutParams(llp);
+//        ll.addView(pbFooter);
+//        ll.addView(tvLoadMore);
+        footer=tvLoadMore;
 
         touchSlop = ViewConfiguration.get(mContext).getScaledTouchSlop();
         refreshUpdatedAtValue();
@@ -314,7 +333,13 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
         }
         //为ViewGroup设置宽高
         setMeasuredDimension(maxWidth, maxHeight);
-//        Log.e(TAG, "onMeasure: " );
+        Log.e(TAG, "onMeasure: " );
+    }
+
+    @Override
+    protected void onFinishInflate() {
+        super.onFinishInflate();
+//        Log.e(TAG, "onFinishInflate: ================" +getChildCount());
     }
 
     /**
@@ -322,7 +347,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
      */
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
-//        Log.e(TAG, "onLayout: " );
+        Log.e(TAG, "onLayout: " );
         if(!hasFinishedLayout){
             mView=getChildAt(1);
             addView(footer);
@@ -362,7 +387,6 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
-                Log.e(TAG, "dispatchTouchEvent: " +event.getPointerId(event.getActionIndex())+"#"+event.getActionIndex());
                 if(event.getPointerId(event.getActionIndex())==0){
                     mLastY = event.getY(0);
                     mFirstY = event.getY();
@@ -605,7 +629,6 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
                     @Override
                     public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
                         //此处有两种选择：1、绝对的滚动到最底部。2、滚动到最后一个元素就开始去加载，不必显示footer
-//                        Log.e(TAG, "onScroll: 111111111111111111" );
                         if(isTouching){
                             return;
                         }
@@ -871,6 +894,14 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
         this.canAutoLoadMore = canAutoLoadMore;
     }
 
+    public boolean isRefreshing() {
+        return isRefreshing;
+    }
+
+    public boolean isLoading() {
+        return isLoading;
+    }
+
     /**
      * 下拉刷新的监听器，使用下拉刷新的地方应该注册此监听器来获取刷新回调。
      */
@@ -907,6 +938,10 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
      */
     public void setOnRefreshAndLoadMoreListener(PullToRefreshAndPushToLoadMoreListener listener) {
         setOnRefreshAndLoadMoreListener(listener, mId);
+    }
+
+    private int dp2px(int dp){
+        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,dp,mContext.getResources().getDisplayMetrics());
     }
 
 }
