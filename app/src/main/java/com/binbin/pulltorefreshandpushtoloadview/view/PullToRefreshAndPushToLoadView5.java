@@ -36,7 +36,7 @@ import java.security.NoSuchAlgorithmException;
  * 遗留问题：布局加入padding margin出现问题，不满一屏的处理，允许刷新加载的控制，item点击问题
  */
 
-public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
+public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
     private static final String TAG = "tianbin";
     private Context mContext;
     private Scroller mScroller;
@@ -226,6 +226,10 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
 
     private static final float DEFAULT_RATIO = 2f;
     /**
+     * 判断是否可以拖动（防止多指触摸）
+     */
+    private boolean canDrag=false;
+    /**
      * 拖动阻力系数
      */
     private float ratio = DEFAULT_RATIO;
@@ -294,14 +298,11 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
 
         touchSlop = ViewConfiguration.get(mContext).getScaledTouchSlop();
         refreshUpdatedAtValue();
-        setOrientation(VERTICAL);
         addView(header, 0);
     }
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-
         for (int i = 0; i < getChildCount(); i++) {
             View childView = getChildAt(i);
             if(childView.getVisibility()!=View.GONE){
@@ -313,7 +314,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
         }
         //为ViewGroup设置宽高
         setMeasuredDimension(maxWidth, maxHeight);
-        Log.e(TAG, "onMeasure: " );
+//        Log.e(TAG, "onMeasure: " );
     }
 
     /**
@@ -321,8 +322,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
      */
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
-        super.onLayout(changed, l, t, r, b);
-        Log.e(TAG, "onLayout: " );
+//        Log.e(TAG, "onLayout: " );
         if(!hasFinishedLayout){
             mView=getChildAt(1);
             addView(footer);
@@ -359,16 +359,27 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
         //每次首先进行判断是否在列表顶部或者底部
         judgeIsTop();
         judgeIsBottom();
-        switch (event.getAction()) {
+        switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-                mLastY = event.getY();
-                mFirstY = event.getY();
-                isTouching=true;
+            case MotionEvent.ACTION_POINTER_DOWN:
+                Log.e(TAG, "dispatchTouchEvent: " +event.getPointerId(event.getActionIndex())+"#"+event.getActionIndex());
+                if(event.getPointerId(event.getActionIndex())==0){
+                    mLastY = event.getY(0);
+                    mFirstY = event.getY();
+                    isTouching=true;
+                    canDrag=true;
+                }else{
+                    return false;
+                }
                 break;
             case MotionEvent.ACTION_MOVE:
+                if(!canDrag){
+                    break;
+                }
+                int pointerIndex=event.findPointerIndex(0);
 //                float totalDistance = event.getY() - mFirstY;
-                float deltaY = event.getY() - mLastY;
-                mLastY = event.getY();
+                float deltaY = event.getY(pointerIndex) - mLastY;
+                mLastY = event.getY(pointerIndex);
 //                if (Math.abs(deltaY) < touchSlop) {
 //                    Log.e(TAG,deltaY+"=============Math.abs(deltaY) < touchSlop============="+touchSlop);
 //                    return false;
@@ -386,7 +397,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
                             ratio += 0.05f;
                         }
                     }else{
-                        ratio=DEFAULT_RATIO;
+                        ratio=1;
                     }
                     int dy=(int) (deltaY / ratio);
                     if(deltaY>0 && Math.abs(dy)>Math.abs(getScrollY())){
@@ -398,7 +409,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
                 }else if ((showTop&&canRefresh)||hideTop) {
                     //说明头部显示，自己处理滑动，无论上滑下滑均同步移动（==0代表滑动到顶部可以继续下拉）
                     if (deltaY < 0) {//来回按住上下移动：下拉逐渐增加难度，上拉不变
-                        ratio = DEFAULT_RATIO;//此处如果系数不是1，则会出现列表跳动的现象。。。暂未解决！！！
+                        ratio = 1;//此处如果系数不是1，则会出现列表跳动的现象。。。暂未解决！！！
                     } else {
                         if(Math.abs(getScrollY())>=-hideHeaderHeight){
                             ratio += 0.05f;//当头部露出以后逐步增加下拉难度
@@ -427,8 +438,12 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
                     return super.dispatchTouchEvent(event);
                 }
 //                break;
+            case MotionEvent.ACTION_POINTER_UP:
             default:
                 //重置==============================================
+                if(event.getPointerId(event.getActionIndex())==0){
+                    canDrag=false;
+                }
                 ratio = DEFAULT_RATIO;
                 isTouching=false;
                 //处理顶部==========================================
@@ -590,7 +605,7 @@ public class PullToRefreshAndPushToLoadView5 extends LinearLayout {
                     @Override
                     public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
                         //此处有两种选择：1、绝对的滚动到最底部。2、滚动到最后一个元素就开始去加载，不必显示footer
-                        Log.e(TAG, "onScroll: 111111111111111111" );
+//                        Log.e(TAG, "onScroll: 111111111111111111" );
                         if(isTouching){
                             return;
                         }
