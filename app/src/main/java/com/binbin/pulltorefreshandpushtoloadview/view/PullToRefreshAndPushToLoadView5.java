@@ -294,26 +294,9 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
         description = (TextView) header.findViewById(R.id.description);
         updateAt = (TextView) header.findViewById(R.id.updated_at);
 
-//        footer = LayoutInflater.from(mContext).inflate(R.layout.loadmore_footer, null, false);
-//        pbFooter = (ProgressBar) footer.findViewById(R.id.pb);
-//        tvLoadMore = (TextView) footer.findViewById(R.id.tv_load_more);
-
-        LinearLayout ll=new LinearLayout(mContext);
-//        LinearLayout.LayoutParams llp=new LinearLayout.LayoutParams(-2,-2);
-//        llp.gravity= Gravity.CENTER;
-//        llp.height=dp2px(60);
-        pbFooter=new ProgressBar(mContext);
-//        llp.rightMargin= dp2px(16);
-//        pbFooter.setLayoutParams(llp);
-        tvLoadMore=new TextView(mContext);
-        tvLoadMore.setText(getResources().getString(R.string.load_more_normal));
-//        tvLoadMore.setTextSize(TypedValue.COMPLEX_UNIT_SP,15);
-//        tvLoadMore.setGravity(Gravity.CENTER);
-//        llp.rightMargin=0;
-//        tvLoadMore.setLayoutParams(llp);
-//        ll.addView(pbFooter);
-//        ll.addView(tvLoadMore);
-        footer=tvLoadMore;
+        footer = LayoutInflater.from(mContext).inflate(R.layout.loadmore_footer, null, false);
+        pbFooter = (ProgressBar) footer.findViewById(R.id.pb);
+        tvLoadMore = (TextView) footer.findViewById(R.id.tv_load_more);
 
         touchSlop = ViewConfiguration.get(mContext).getScaledTouchSlop();
         refreshUpdatedAtValue();
@@ -342,9 +325,6 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
 //        Log.e(TAG, "onFinishInflate: ================" +getChildCount());
     }
 
-    /**
-     * 进行一些关键性的初始化操作，比如：将下拉头向上偏移进行隐藏，给ListView注册touch事件。
-     */
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         Log.e(TAG, "onLayout: " );
