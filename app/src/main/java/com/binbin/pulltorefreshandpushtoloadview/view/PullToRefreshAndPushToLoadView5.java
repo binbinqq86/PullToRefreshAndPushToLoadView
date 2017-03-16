@@ -35,7 +35,7 @@ import java.security.NoSuchAlgorithmException;
  * Created by -- on 2016/11/2.
  * 自定义下拉刷新上拉加载的基类，可以扩展多种可滑动view(ListView,GridView,RecyclerView...)
  * 第五版：第三版的基础上进行改进，增加上拉加载更多。。。
- * 遗留问题：布局加入padding margin出现问题，不满一屏的处理，item点击问题
+ * 遗留问题：item点击问题,参考侧滑删除
  */
 
 public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
@@ -304,6 +304,12 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
     }
 
     @Override
+    protected void onFinishInflate() {
+        super.onFinishInflate();
+//        Log.e(TAG, "onFinishInflate: ================" +getChildCount());
+    }
+
+    @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         for (int i = 0; i < getChildCount(); i++) {
             View childView = getChildAt(i);
@@ -315,19 +321,25 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
             }
         }
         //为ViewGroup设置宽高
-        setMeasuredDimension(maxWidth, maxHeight);
-        Log.e(TAG, "onMeasure: " );
-    }
+        setMeasuredDimension(maxWidth+getPaddingLeft()+getPaddingRight(), maxHeight+getPaddingTop()+getPaddingBottom());
+//        Log.e(TAG, "onMeasure: ");
 
-    @Override
-    protected void onFinishInflate() {
-        super.onFinishInflate();
-//        Log.e(TAG, "onFinishInflate: ================" +getChildCount());
+        //处理数据不满一屏的情况下禁止上拉
+        if(mView!=null){
+            ViewGroup.LayoutParams vlp=mView.getLayoutParams();
+            if(vlp.height==LayoutParams.WRAP_CONTENT){
+                vlp.height= LayoutParams.MATCH_PARENT;
+            }
+            if(vlp.width==LayoutParams.WRAP_CONTENT){
+                vlp.width= LayoutParams.MATCH_PARENT;
+            }
+            mView.setLayoutParams(vlp);
+        }
     }
 
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
-        Log.e(TAG, "onLayout: " );
+//        Log.e(TAG, "onLayout: ");
         if(!hasFinishedLayout){
             mView=getChildAt(1);
             addView(footer);
@@ -344,7 +356,8 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
             hideFooterHeight=footer.getHeight();
 //            Log.e(TAG, "onLayout: "+hideFooterHeight+"@"+hideHeaderHeight);
         }
-        int top=hideHeaderHeight;
+
+        int top=hideHeaderHeight+getPaddingTop();
 //        header.layout(0,top,maxWidth,top+header.getMeasuredHeight());
 //        top+=header.getMeasuredHeight();
 //        mView.layout(0,top,maxWidth,top+mView.getMeasuredHeight());
@@ -353,7 +366,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
         for (int i = 0; i < getChildCount(); i++) {
             View childView = getChildAt(i);
             if (childView.getVisibility() != GONE) {
-                childView.layout(0, top, maxWidth, top+childView.getMeasuredHeight());
+                childView.layout(getPaddingLeft(), top, maxWidth+getPaddingLeft(), top+childView.getMeasuredHeight());
                 top+=childView.getMeasuredHeight();
             }
         }
@@ -658,7 +671,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
             View lastChild = absListView.getChildAt(absListView.getLastVisiblePosition()-absListView.getFirstVisiblePosition());
             if (lastChild != null) {
                 int lastVisiblePos = absListView.getLastVisiblePosition();//不必完全可见，当前屏幕中最后一个可见的子view在整个列表的位置
-                if (lastVisiblePos == absListView.getAdapter().getCount()-1 && lastChild.getBottom() == absListView.getMeasuredHeight()) {
+                if (lastVisiblePos == absListView.getAdapter().getCount()-1 && lastChild.getBottom() == absListView.getMeasuredHeight()-mView.getPaddingBottom()) {
                     // 如果最后一个元素的下边缘，距离父布局值为view的高度，就说明View滚动到了最底部，此时应该允许上拉加载
                     isBottom = true;
                 } else {
@@ -680,7 +693,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
             if (firstVisibleChild != null) {
 //                Log.e(TAG, "judgeIsBottom: "+"@@@@@@@@@@@@@@"+"#"+ recyclerView.getMeasuredHeight());
                 if (lastChild != null &&
-                        recyclerView.getLayoutManager().getDecoratedBottom(lastChild) == recyclerView.getMeasuredHeight()) {
+                        recyclerView.getLayoutManager().getDecoratedBottom(lastChild) == recyclerView.getMeasuredHeight()-mView.getPaddingBottom()) {
 //                    Log.e(TAG, "judgeIsBottom: "+"==================" );
                     isBottom = true;
                 } else {
@@ -704,7 +717,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
             View firstChild = absListView.getChildAt(0);//返回的是当前屏幕中的第一个子view，非整个列表
             if (firstChild != null) {
                 int firstVisiblePos = absListView.getFirstVisiblePosition();//不必完全可见，当前屏幕中第一个可见的子view在整个列表的位置
-                if (firstVisiblePos == 0 && firstChild.getTop() == 0) {
+                if (firstVisiblePos == 0 && firstChild.getTop()-mView.getPaddingTop() == 0) {
                     // 如果首个元素的上边缘，距离父布局值为0，就说明ListView滚动到了最顶部，此时应该允许下拉刷新
                     isTop = true;
                 } else {
@@ -724,7 +737,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
 //                Log.e("tianbin","+++++++++");
 //            }
             if (firstVisibleChild != null) {
-                if (firstChild != null && recyclerView.getLayoutManager().getDecoratedTop(firstChild) == 0) {
+                if (firstChild != null && recyclerView.getLayoutManager().getDecoratedTop(firstChild)-mView.getPaddingTop() == 0) {
                     isTop = true;
                 } else {
                     isTop = false;

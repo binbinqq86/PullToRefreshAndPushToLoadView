@@ -2,5 +2,11 @@
 <com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView5 xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/prpt"
+    android:padding="20dp"
     android:layout_width="match_parent"
-    android:layout_height="match_parent" />
+    android:layout_height="match_parent" >
+    <android.support.v7.widget.RecyclerView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/rv"/>
+    </com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView5>
