@@ -30,6 +30,8 @@ import android.widget.TextView;
 import com.binbin.pulltorefreshandpushtoloadview.R;
 
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by -- on 2016/11/2.
@@ -38,7 +40,7 @@ import java.security.NoSuchAlgorithmException;
  * 遗留问题：item点击问题,参考侧滑删除
  */
 
-public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
+public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
     private static final String TAG = "tianbin";
     private Context mContext;
     private Scroller mScroller;
@@ -46,6 +48,11 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
      * 在被判定为滚动之前用户手指可以移动的最大值。
      */
     private int touchSlop;
+
+    /**
+     * 当前触摸的列表item
+     */
+    private View touchedItem = null;
 
     /**
      * 下拉头的高度
@@ -373,10 +380,11 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
     }
 
     @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
+    public boolean dispatchTouchEvent(final MotionEvent event) {
         //每次首先进行判断是否在列表顶部或者底部
         judgeIsTop();
         judgeIsBottom();
+
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
@@ -385,22 +393,54 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
                     mFirstY = event.getY();
                     isTouching=true;
                     canDrag=true;
+
+                    //找到对应的触摸item
+                    ViewGroup vg= (ViewGroup) mView;
+                    for (int i = 0; i < vg.getChildCount(); i++) {
+                        View item=vg.getChildAt(i);
+//                        Log.e(TAG, i+"dispatchTouchEvent: "+event.getX()+"#"+event.getY()+"#"+item.getLeft()+"#"+item.getTop()+"#"+item.getRight()+"#"+item.getBottom() );
+                        if(event.getX()>=item.getLeft()&&event.getX()<=item.getRight()
+                                &&event.getY()>=item.getTop()&&event.getY()<=item.getBottom()){
+                            touchedItem=item;
+//                            touchedItem.setPressed(false);
+//                            touchedItem.setFocusable(false);
+//                            touchedItem.setFocusableInTouchMode(false);
+//                            touchedItem.setClickable(false);
+//                            touchedItem.setLongClickable(false);
+                            break;
+                        }
+                    }
                 }else{
                     return false;
                 }
                 break;
             case MotionEvent.ACTION_MOVE:
                 if(!canDrag){
-                    break;
+                    return super.dispatchTouchEvent(event);
                 }
                 int pointerIndex=event.findPointerIndex(0);
 //                float totalDistance = event.getY() - mFirstY;
                 float deltaY = event.getY(pointerIndex) - mLastY;
                 mLastY = event.getY(pointerIndex);
-//                if (Math.abs(deltaY) < touchSlop) {
-//                    Log.e(TAG,deltaY+"=============Math.abs(deltaY) < touchSlop============="+touchSlop);
-//                    return false;
-//                }
+
+//                Log.e(TAG,touchSlop+"$$$"+Math.abs(event.getY() - mFirstY) );
+                if (Math.abs(event.getY() - mFirstY) > 0) {//判断是否滑动还是长按
+                    //滑动事件
+                    Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==yyyyyyyy");
+                    if(touchedItem!=null){
+                        touchedItem.setPressed(false);
+                        touchedItem.setFocusable(false);
+                        touchedItem.setFocusableInTouchMode(false);
+//                        touchedItem.setClickable(true);
+//                        touchedItem.setLongClickable(true);
+                        Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==xyz");
+                    }
+                }else{
+                    //点击或长按事件
+                    Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==zzzzzzzz");
+                    return super.dispatchTouchEvent(event);
+                }
+
                 boolean showTop=deltaY>=0 && isTop;
                 boolean hideTop=deltaY<=0 && getScrollY()<0;
 //                boolean noMove=deltaY==0;//当不动的时候屏蔽一切事件，防止列表滚动
@@ -422,6 +462,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
                         dy=Math.abs(getScrollY());
                     }
                     scrollBy(0, -dy);
+                    Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==22222222");
                     return true;
                 }else if ((showTop&&canRefresh)||hideTop) {
                     //说明头部显示，自己处理滑动，无论上滑下滑均同步移动（==0代表滑动到顶部可以继续下拉）
@@ -450,8 +491,10 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
                         updateHeaderView();
                         lastStatus = currentStatus;
                     }
+                    Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==333333333");
                     return true;
                 }else{
+                    Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==44444444");
                     return super.dispatchTouchEvent(event);
                 }
 //                break;
@@ -463,6 +506,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup {
                 }
                 ratio = DEFAULT_RATIO;
                 isTouching=false;
+                touchedItem=null;
                 //处理顶部==========================================
                 if (currentStatus == STATUS_RELEASE_TO_REFRESH) {
                     // 松手时如果是释放立即刷新状态，就去调用正在刷新的任务

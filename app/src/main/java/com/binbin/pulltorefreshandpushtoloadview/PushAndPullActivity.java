@@ -4,11 +4,13 @@ import android.content.Context;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,6 +26,7 @@ import com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoad
 
 public class PushAndPullActivity extends AppCompatActivity {
 
+    private static final String TAG = "PushAndPullActivity";
     private PullToRefreshAndPushToLoadView5 pullToRefreshAndPushToLoadView;
     private String[] items = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
             "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"};
@@ -156,6 +159,20 @@ public class PushAndPullActivity extends AppCompatActivity {
         @Override
         public void onBindViewHolder(final MyAdapter.MyViewHolder holder, final int position) {
             holder.tv.setText(datas[position]);
+            holder.tv.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    Toast.makeText(PushAndPullActivity.this,"onClick====="+holder.getAdapterPosition(),Toast.LENGTH_SHORT).show();
+                }
+            });
+            holder.tv.setOnLongClickListener(new View.OnLongClickListener() {
+                @Override
+                public boolean onLongClick(View view) {
+                    Toast.makeText(PushAndPullActivity.this,"onLongClick====="+holder.getAdapterPosition(),Toast.LENGTH_SHORT).show();
+                    new AlertDialog.Builder(PushAndPullActivity.this).setTitle("hello").setMessage(holder.getAdapterPosition()+":"+items[holder.getAdapterPosition()]).setNegativeButton("cancel",null).show();
+                    return true;
+                }
+            });
         }
 
         @Override
