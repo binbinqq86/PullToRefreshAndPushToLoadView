@@ -16,6 +16,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.BaseAdapter;
 import android.widget.GridView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -23,11 +24,12 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView5;
+import com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView6;
 
 public class PushAndPullActivity extends AppCompatActivity {
 
     private static final String TAG = "PushAndPullActivity";
-    private PullToRefreshAndPushToLoadView5 pullToRefreshAndPushToLoadView;
+    private PullToRefreshAndPushToLoadView6 pullToRefreshAndPushToLoadView;
     private String[] items = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
             "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"};
 
@@ -37,7 +39,7 @@ public class PushAndPullActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.recycler_list_activity_main);
-        pullToRefreshAndPushToLoadView = (PullToRefreshAndPushToLoadView5) findViewById(R.id.prpt);
+        pullToRefreshAndPushToLoadView = (PullToRefreshAndPushToLoadView6) findViewById(R.id.prpt);
 //        pullToRefreshAndPushToLoadView.setCanRefresh(false);
 //        pullToRefreshAndPushToLoadView.setCanLoadMore(false);
 //        pullToRefreshAndPushToLoadView.setCanAutoLoadMore(true);
@@ -52,7 +54,7 @@ public class PushAndPullActivity extends AppCompatActivity {
 //        list();
         recycler();
 
-        pullToRefreshAndPushToLoadView.setOnRefreshAndLoadMoreListener(new PullToRefreshAndPushToLoadView5.PullToRefreshAndPushToLoadMoreListener() {
+        pullToRefreshAndPushToLoadView.setOnRefreshAndLoadMoreListener(new PullToRefreshAndPushToLoadView6.PullToRefreshAndPushToLoadMoreListener() {
             @Override
             public void onRefresh() {
                 refresh();
@@ -72,7 +74,8 @@ public class PushAndPullActivity extends AppCompatActivity {
 //        mlp.leftMargin=100;
         listView.setLayoutParams(mlp);
         pullToRefreshAndPushToLoadView.addView(listView);
-        listView.setAdapter(new ArrayAdapter<String>(this, R.layout.item, items));
+//        listView.setAdapter(new ArrayAdapter<String>(this, R.layout.item, items));
+        listView.setAdapter(new MyLVAdapter(items,this));
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
@@ -117,7 +120,7 @@ public class PushAndPullActivity extends AppCompatActivity {
             public void run() {
                 super.run();
                 try {
-                    Thread.sleep(2 * 1000);
+                    Thread.sleep(30 * 1000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -132,7 +135,7 @@ public class PushAndPullActivity extends AppCompatActivity {
             public void run() {
                 super.run();
                 try {
-                    Thread.sleep(2 * 1000);
+                    Thread.sleep(10 * 1000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -141,6 +144,65 @@ public class PushAndPullActivity extends AppCompatActivity {
         }.start();
     }
 
+    class MyLVAdapter extends BaseAdapter{
+
+        private String[] datas;
+        private Context mContext;
+        public MyLVAdapter(String[] datas,Context mContext){
+            this.datas=datas;
+            this.mContext=mContext;
+        }
+
+
+        @Override
+        public int getCount() {
+            return datas.length;
+        }
+
+        @Override
+        public Object getItem(int position) {
+            return datas[position];
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public View getView(final int position, View convertView, ViewGroup parent) {
+            ViewHolder viewHolder=null;
+            if(convertView==null){
+                convertView=LayoutInflater.from(mContext).inflate(R.layout.item,null);
+                viewHolder=new ViewHolder();
+                viewHolder.tv= (TextView) convertView.findViewById(R.id.tv);
+                convertView.setTag(viewHolder);
+            }else{
+                viewHolder= (ViewHolder) convertView.getTag();
+            }
+            viewHolder.tv.setText(datas[position]);
+            viewHolder.tv.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    Toast.makeText(PushAndPullActivity.this,"onClick====="+position,Toast.LENGTH_SHORT).show();
+                }
+            });
+            viewHolder.tv.setOnLongClickListener(new View.OnLongClickListener() {
+                @Override
+                public boolean onLongClick(View view) {
+                    Toast.makeText(PushAndPullActivity.this,"onLongClick====="+position,Toast.LENGTH_SHORT).show();
+                    new AlertDialog.Builder(PushAndPullActivity.this).setTitle("hello").setMessage(position+":"+items[position]).setNegativeButton("cancel",null).show();
+                    return true;
+                }
+            });
+            return convertView;
+        }
+
+    }
+
+    static class ViewHolder{
+        TextView tv;
+    }
 
     class MyAdapter extends RecyclerView.Adapter<MyAdapter.MyViewHolder> {
 

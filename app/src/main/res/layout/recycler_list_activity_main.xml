@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView5 xmlns:android="http://schemas.android.com/apk/res/android"
+<com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView6 xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/prpt"
     android:padding="20dp"
@@ -9,4 +9,4 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:id="@+id/rv"/>
-    </com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView5>
+    </com.binbin.pulltorefreshandpushtoloadview.view.PullToRefreshAndPushToLoadView6>

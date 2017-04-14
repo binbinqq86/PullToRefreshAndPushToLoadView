@@ -2,18 +2,15 @@ package com.binbin.pulltorefreshandpushtoloadview.view;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Canvas;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.support.annotation.RequiresApi;
-import android.support.v7.widget.LinearLayoutCompat;
 import android.support.v7.widget.RecyclerView;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.TypedValue;
-import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -22,25 +19,22 @@ import android.view.ViewGroup;
 import android.view.animation.RotateAnimation;
 import android.widget.AbsListView;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.Scroller;
 import android.widget.TextView;
 
 import com.binbin.pulltorefreshandpushtoloadview.R;
 
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.List;
+import java.lang.reflect.Field;
 
 /**
  * Created by -- on 2016/11/2.
  * 自定义下拉刷新上拉加载的基类，可以扩展多种可滑动view(ListView,GridView,RecyclerView...)
- * 第五版：第三版的基础上进行改进，增加上拉加载更多。。。
- * 遗留问题：item点击问题
+ * 第六版：第五版的基础上进行改进，修复item点击与滑动冲突问题
+ * header和列表不能连续无缝平滑滑动，必须松手一次：因为该次事件已经被处理为拦截或者不拦截，所以后续move事件不能再次触发onInterceptTouchevent事件，只能松手重新触发
  */
-@Deprecated
-public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
+
+public class PullToRefreshAndPushToLoadView6 extends ViewGroup{
     private static final String TAG = "tianbin";
     private Context mContext;
     private Scroller mScroller;
@@ -48,11 +42,15 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
      * 在被判定为滚动之前用户手指可以移动的最大值。
      */
     private int touchSlop;
+    /**
+     * 判断手指起始落点，如果距离属于滑动了，就屏蔽一切点击事件
+     */
+    private boolean isUserSwiped;
 
     /**
-     * 当前触摸的列表item
+     * 记录开始按下的时间
      */
-    private View touchedItem = null;
+    private long startPress;
 
     /**
      * 下拉头的高度
@@ -270,21 +268,21 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
 
     private Handler handler = new Handler(Looper.getMainLooper());
 
-    public PullToRefreshAndPushToLoadView5(Context context) {
+    public PullToRefreshAndPushToLoadView6(Context context) {
         this(context, null);
     }
 
-    public PullToRefreshAndPushToLoadView5(Context context, AttributeSet attrs) {
+    public PullToRefreshAndPushToLoadView6(Context context, AttributeSet attrs) {
         this(context, attrs, 0);
     }
 
-    public PullToRefreshAndPushToLoadView5(Context context, AttributeSet attrs, int defStyleAttr) {
+    public PullToRefreshAndPushToLoadView6(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         init(context);
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public PullToRefreshAndPushToLoadView5(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+    public PullToRefreshAndPushToLoadView6(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
         super(context, attrs, defStyleAttr, defStyleRes);
         init(context);
     }
@@ -333,7 +331,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
 
         //处理数据不满一屏的情况下禁止上拉
         if(mView!=null){
-            ViewGroup.LayoutParams vlp=mView.getLayoutParams();
+            LayoutParams vlp=mView.getLayoutParams();
             if(vlp.height==LayoutParams.WRAP_CONTENT){
                 vlp.height= LayoutParams.MATCH_PARENT;
             }
@@ -388,58 +386,100 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
+                isUserSwiped=false;
+                startPress=System.currentTimeMillis();
                 if(event.getPointerId(event.getActionIndex())==0){
                     mLastY = event.getY(0);
                     mFirstY = event.getY();
                     isTouching=true;
                     canDrag=true;
-
-                    //找到对应的触摸item
-                    ViewGroup vg= (ViewGroup) mView;
-                    for (int i = 0; i < vg.getChildCount(); i++) {
-                        View item=vg.getChildAt(i);
-//                        Log.e(TAG, i+"dispatchTouchEvent: "+event.getX()+"#"+event.getY()+"#"+item.getLeft()+"#"+item.getTop()+"#"+item.getRight()+"#"+item.getBottom() );
-                        if(event.getX()>=item.getLeft()&&event.getX()<=item.getRight()
-                                &&event.getY()>=item.getTop()&&event.getY()<=item.getBottom()){
-                            touchedItem=item;
-//                            touchedItem.setPressed(false);
-//                            touchedItem.setFocusable(false);
-//                            touchedItem.setFocusableInTouchMode(false);
-//                            touchedItem.setClickable(false);
-//                            touchedItem.setLongClickable(false);
-                            break;
-                        }
-                    }
                 }else{
                     return false;
                 }
                 break;
             case MotionEvent.ACTION_MOVE:
                 if(!canDrag){
-                    return super.dispatchTouchEvent(event);
+                    return false;//false交给父控件处理
                 }
-                int pointerIndex=event.findPointerIndex(0);
+//                int pointerIndex=event.findPointerIndex(0);
 //                float totalDistance = event.getY() - mFirstY;
-                float deltaY = event.getY(pointerIndex) - mLastY;
-                mLastY = event.getY(pointerIndex);
+//                float deltaY = event.getY(pointerIndex) - mLastY;
+//                mLastY = event.getY(pointerIndex);
 
 //                Log.e(TAG,touchSlop+"$$$"+Math.abs(event.getY() - mFirstY) );
-                if (Math.abs(event.getY() - mFirstY) > 0) {//判断是否滑动还是长按
+//                Class<?> clazz=View.class;
+//                try {
+//                    Field field=clazz.getDeclaredField("mHasPerformedLongPress");
+//                    field.setAccessible(true);
+//                    Log.e(TAG, "dispatchTouchEvent: "+field.get(this));
+//                } catch (NoSuchFieldException e) {
+//                    e.printStackTrace();
+//                } catch (IllegalAccessException e) {
+//                    e.printStackTrace();
+//                }
+                break;
+            case MotionEvent.ACTION_POINTER_UP:
+            default:
+                if (Math.abs(event.getY() - mFirstY) > touchSlop) {//判断是否滑动还是长按
                     //滑动事件
-                    Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==yyyyyyyy");
-                    if(touchedItem!=null){
-                        touchedItem.setPressed(false);
-                        touchedItem.setFocusable(false);
-                        touchedItem.setFocusableInTouchMode(false);
-//                        touchedItem.setClickable(true);
-//                        touchedItem.setLongClickable(true);
-                        Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==xyz");
-                    }
+//                    Log.e(TAG,"===dispatchTouchEvent===ACTION_POINTER_UP==yyyyyyyy");
+                    isUserSwiped=true;
                 }else{
                     //点击或长按事件
-                    Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==zzzzzzzz");
-                    return super.dispatchTouchEvent(event);
+//                    Log.e(TAG,"===dispatchTouchEvent===ACTION_POINTER_UP==zzzzzzzz");
                 }
+                //重置==============================================
+                if(event.getPointerId(event.getActionIndex())==0){
+                    canDrag=false;
+                }
+                ratio = DEFAULT_RATIO;
+                isTouching=false;
+                break;
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        switch (ev.getAction()){
+            case MotionEvent.ACTION_MOVE:
+                float deltaY = ev.getY() - mLastY;
+                if (Math.abs(ev.getY() - mFirstY) > touchSlop) {//只要有滑动，就进行处理，屏蔽一切点击长按事件
+                    if(getScrollY()<0&&currentStatus==STATUS_REFRESHING){//正在刷新并且header没有完全隐藏时，把事件交给自己处理
+                        return true;
+                    }
+                    if(getScrollY()>0&&currentFooterStatus==STATUS_LOADING){//正在刷新并且footer没有完全隐藏时，把事件交给自己处理
+                        return true;
+                    }
+                    if(getScrollY()==0&&((isTop&&deltaY>0)||(isBottom&&deltaY<0))){//header footer都隐藏时，顶部下拉或者底部上拉都把事件交给自己处理
+                        return true;
+                    }
+                }else{
+                    if(System.currentTimeMillis()-startPress>=ViewConfiguration.getLongPressTimeout()){
+                        //说明长按事件发生，禁止任何滑动操作
+//                        Log.e(TAG, "onInterceptTouchEvent: "+"======longclick happened======" );
+                        canDrag=false;
+                    }
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+                if (isUserSwiped) {//点击事件发生在onTouchEvent的ACTION_UP中，所以此处进行处理：如果属于滑动则拦截一切事件，禁止传递给子view
+                    return true;
+                }
+                if(isRefreshing||isLoading){//正在刷新或者加载的时候，禁止点击事件
+                    return true;
+                }
+                break;
+        }
+        return super.onInterceptTouchEvent(ev);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent ev) {
+        switch (ev.getAction()){
+            case MotionEvent.ACTION_MOVE:
+                float deltaY = ev.getY() - mLastY;
+                mLastY = ev.getY();
 
                 boolean showTop=deltaY>=0 && isTop;
                 boolean hideTop=deltaY<=0 && getScrollY()<0;
@@ -462,7 +502,6 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
                         dy=Math.abs(getScrollY());
                     }
                     scrollBy(0, -dy);
-                    Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==22222222");
                     return true;
                 }else if ((showTop&&canRefresh)||hideTop) {
                     //说明头部显示，自己处理滑动，无论上滑下滑均同步移动（==0代表滑动到顶部可以继续下拉）
@@ -491,22 +530,11 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
                         updateHeaderView();
                         lastStatus = currentStatus;
                     }
-                    Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==333333333");
                     return true;
                 }else{
-                    Log.e(TAG,"===dispatchTouchEvent===ACTION_MOVE==44444444");
-                    return super.dispatchTouchEvent(event);
+                    return super.onTouchEvent(ev);
                 }
-//                break;
-            case MotionEvent.ACTION_POINTER_UP:
-            default:
-                //重置==============================================
-                if(event.getPointerId(event.getActionIndex())==0){
-                    canDrag=false;
-                }
-                ratio = DEFAULT_RATIO;
-                isTouching=false;
-                touchedItem=null;
+            case MotionEvent.ACTION_UP:
                 //处理顶部==========================================
                 if (currentStatus == STATUS_RELEASE_TO_REFRESH) {
                     // 松手时如果是释放立即刷新状态，就去调用正在刷新的任务
@@ -528,9 +556,9 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
                     //显示底部，开始加载更多
                     showFooter();
                 }
-                break;
+                return true;
         }
-        return super.dispatchTouchEvent(event);
+        return super.onTouchEvent(ev);
     }
 
     private void hideFooter(){
@@ -940,7 +968,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
     }
 
     /**
-     * 下拉刷新的监听器，使用下拉刷新的地方应该注册此监听器来获取刷新回调。
+     * 监听器，使用刷新和加载的地方应该注册此监听器来获取刷新回调。
      */
     public interface PullToRefreshAndPushToLoadMoreListener {
 
@@ -957,7 +985,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
     }
 
     /**
-     * 给下拉刷新控件注册一个监听器。
+     * 给控件注册一个监听器。
      *
      * @param listener 监听器的实现。
      * @param id       为了防止不同界面的下拉刷新在上次更新时间上互相有冲突， 请不同界面在注册下拉刷新监听器时一定要传入不同的id。
@@ -969,7 +997,7 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
     }
 
     /**
-     * 给下拉刷新控件注册一个监听器。
+     * 给控件注册一个监听器。
      *
      * @param listener 监听器的实现。
      */
@@ -979,6 +1007,16 @@ public class PullToRefreshAndPushToLoadView5 extends ViewGroup{
 
     private int dp2px(int dp){
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP,dp,mContext.getResources().getDisplayMetrics());
+    }
+
+
+    /**
+     * 取消长按事件的回调
+     */
+    private void removeLongClick(){
+        if(mView!=null){
+            mView.cancelLongPress();
+        }
     }
 
 }
